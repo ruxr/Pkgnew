@@ -146,13 +146,11 @@ for P in $A; do
 	N=${P%#*} V=${P#*#} T=
 	case " $L " in *\ $N\ *);; *) continue;; esac
 	case " $U " in
-	*\ $P\ *)	case " $M " in
-			*\ $N\ *) T=$V;;
-			*) [ -n "$DST" ] || continue
-			esac;;
-	*\ $N#*)	T=${U#*$N#} T=${T%% *};;
-	*) case " $W " in *\ :$N\ *) F=${W#*:$N } F=${F%%:*}; Who $F;; esac
+	*\ $P\ *) T=$V
+		case " $M " in *\ $N\ *);; *) [ -n "$DST" ] || continue;; esac;;
+	*\ $N#*) T=${U#*$N#} T=${T%% *}
 	esac
+	case " $W " in *\ :$N\ *) F=${W#*:$N } F=${F%%:*}; Who $F;; esac
 	[ -n "$T" ] && echo Upgrade $N $T to $V || echo Install $N $V
 	if [ -n "$CHK" ]; then
 		Get $N $V$E
