@@ -1,0 +1,221 @@
+.TH pkgnew 8 2019 1.19
+.SH NAME
+.B pkgnew
+- Update and build CRUX packages
+.SH SYNOPSIS
+.B pkgnew [options] [arguments]
+.SH DESCRIPTION
+The
+.B pkgnew
+shell script is designed as alternative of package management utilities
+.I ports
+and
+.IR pkgmk .
+
+.BR pkgnew ,
+like
+.IR ports ,
+uses the configuration of the port collections from the
+.I /etc/ports
+directory.
+
+.BR pkgnew ,
+like
+.IR pkgmk ,
+uses the global build configuration stored in
+.I /etc/pkgmk.conf
+and package build description from
+.IR Pkgfile .
+.SH OPTIONS
+.TP
+.I -b
+Build packages
+.TP
+.I -d
+Download source
+.TP
+.I -e
+Edit working Pkgfile
+.TP
+.I -h
+Display help
+.TP
+.I -p
+Show differences between original and build Pkgfile
+.TP
+.I -u
+Update the port collections
+.TP
+.I -z
+Delete unused source files and packages after build
+.SH ARGUMENTS
+Port or collection names
+.SH USAGE
+.B pkgnew
+uses the standard package build description file
+.IR Pkgfile :
+
+  # Description: DESCRIPTION
+  # URL: URL
+  # Maintaner: MAINTAINER
+  # Depends on: PORT PORT ...
+
+  name=PORTNAME
+  version=VERSION
+  release=NUM
+  source=(URL_SOURCE LOCAL_SOURCE)
+
+  build() {
+  	cd $name-$version
+  	...
+  }
+
+Extensions to
+.I Pkgfile
+that
+.B pkgnew
+checks:
+
+  # Post-install: yes
+  # Required user: User Uid [Group Gid] [Home [Comment]]
+  # Build also: PkgName
+  buildalso() {
+  	mkdir -p PkgName
+  	...
+  }
+
+If the
+.I Pkgfile.patch
+file is present in the port directory, it is used to create a working
+build script.
+
+If in the port directory there is a directory
+.IR add-ons ,
+then all files from it will be copied to the directory of working sources
+after checking the
+.IR .signature .
+
+At the end of the work,
+.B pkgnew
+creates the resulting list of packages
+.I ${PKGMK_PACKAGE_DIR:-/usr/ports}/PKG.use
+for
+.BR pkguse .
+.SH EXAMPLES
+.B 1.
+Updating the ports collection
+.I core
+and show the process of building and installing changed packages:
+
+  # pkgnew -u core
+
+.B 2.
+Building used packages and upgrading them:
+
+  # pkgnew -bd
+
+.B 3.
+Building and installing the missing package and all the dependencies required
+by it, for example, installing the
+.I cdrkit
+package:
+
+  # pkgnew -bd cdrkit
+
+.B 4.
+Delete unused files after building packages:
+
+  # pkgnew -bz
+
+NOTE: Only for files from directories defined by the configuration variables
+.I PKGMK_SOURCE_DIR
+and
+.I PKGMK_PACKAGE_DIR
+
+.B 5.
+An example of splitting
+.I core/acl
+port into a main package and a developer package:
+
+  # pkgnew -e acl
+  {insert next lines}
+  # Build also: acl-dev
+  buildalso() {
+    mkdir -p $name-dev/usr/{lib,share/man}
+    mv $name/usr/include $name-dev/usr
+    mv $name/usr/lib/*.{a,la} $name/usr/lib/pkgconfig $name-dev/usr/lib
+    mv $name/usr/share/man/man3 $name-dev/usr/share/man
+  }
+  :x
+  pkgnew: Create a patch for the original Pkgfile? [N/y] y
+  # pkgnew -b
+.SH EXIT STATUS
+.B 0
+- successful completion.
+.br
+.B 1
+- error termination.
+.SH ENVIRONMENT
+.TP
+.B EDITOR
+Default user's editor.
+.SH FILES
+.TP
+.I Pkgfile
+Package build description.
+.TP
+.I Pkgfile.patch
+Patch for build description.
+.TP
+.I .md5sum
+MD5 checksum of source files.
+.TP
+.I .signature
+SHA256 checksum and signify checksum.
+.TP
+.I add-ons/
+Directory for additional files.
+.TP
+.I /etc/pkgmk.conf
+Global package make configuration.
+.TP
+.I /etc/ports/
+Directory for port collection configuration.
+.TP
+.I /etc/ports/drivers/
+Directory for driver scripts.
+.TP
+.I /usr/ports/
+Root of local ports collection.
+.TP
+.I /usr/ports/PKG.grp
+Role and group configuration file.
+.TP
+.I ${PKGMK_PACKAGE_DIR:-/usr/ports}/PKG.new
+Resulting script used to build and install packages.
+.TP
+.I ${PKGMK_PACKAGE_DIR:-/usr/ports}/PKG.use
+Resulting list of packages in order of dependencies to install with
+.BR pkguse .
+.TP
+.I wget
+Used by
+.B pkgnew
+to download source code.
+.SH SEE ALSO
+.BR pkgadd (8),
+.BR pkginfo (8),
+.BR pkgmk (8),
+.BR pkgmk.conf (5),
+.BR pkgrm (8),
+.BR pkguse (8),
+.BR ports (8),
+.BR rejmerge (8),
+.BR signify (1),
+.BR wget (1).
+.SH REPORTING BUGS
+Report any errors to the author below.
+.SH AUTHOR
+Roman Oreshnikov <r.oreshnikov@gmail.com>.
+.SH COPYRIGHT
+Copyright 2019 by Roman Oreshnikov

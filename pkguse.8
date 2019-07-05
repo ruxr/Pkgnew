@@ -1,0 +1,75 @@
+.TH pkguse 8 2019 1.19
+.SH NAME
+.B pkguse
+- Synchronize CRUX-3.5 packages with MasterHost
+.SH SYNOPSIS
+.B pkguse [options] [arguments]
+.SH DESCRIPTION
+The shell script
+.B pkguse
+is a simple network package manager.
+.SH OPTIONS
+.TP
+.I -d
+Remove specified packages
+.TP
+.I -f
+Force installation
+.TP
+.I -h
+Display help
+.TP
+.I -r ROOT
+Specify alternative installation root
+.TP
+.I -s
+Synchronize packages, default:
+.I compare
+.TP
+.I -u URL
+MasterHost URL, default:
+.I http://crux/CRUX-3.5
+.SH ARGUMENTS
+Package or group names
+.SH EXAMPLES
+.B 1.
+Check for differences in installed packages with MasterHost:
+
+  # pkguse
+
+.B 2.
+Synchronize installed packages with MasterHost:
+
+  # pkguse -s
+.SH EXIT STATUS
+.B 0
+- successful completion.
+.br
+.B 1
+- error termination.
+.SH FILES
+.TP
+.I http://crux/CRUX-3.5/
+Default URL for download required files.
+.TP
+.I http://crux/CRUX-3.5/PKG.use
+List of packages in order of dependencies for installation, created by
+.BR pkgnew .
+.TP
+.I wget
+Used by
+.B pkguse
+to download required files.
+.SH SEE ALSO
+.BR pkgadd (8),
+.BR pkginfo (8),
+.BR pkgnew (8),
+.BR pkgrm (8),
+.BR rejmerge (8),
+.BR wget (1).
+.SH REPORTING BUGS
+Report any errors to the author below.
+.SH AUTHOR
+Roman Oreshnikov <r.oreshnikov@gmail.com>.
+.SH COPYRIGHT
+Copyright 2019 by Roman Oreshnikov

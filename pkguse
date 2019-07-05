@@ -1,0 +1,173 @@
+#!/bin/sh
+#
+#	@(#) pkguse V1.19 (C) 2019 by Roman Oreshnikov
+#
+URL=http://crux/CRUX-3.5
+HLP="Synchronize ${URL##*/} packages with MasterHost
+
+Usage: pkguse [options] [packages]
+Options:
+  -d      Remove specified packages
+  -f      Force installation
+  -h      Display this text
+  -r ROOT Specify alternative installation root
+  -s      Synchronize packages, default: compare
+  -u URL  MasterHost URL, default: $URL
+
+Report bugs to <r.oreshnikov@gmail.com>"
+Msg() { echo pkguse: $* >&2; }
+Err() { Msg $*; exit 1; }
+End() { trap 0; [ -n "$NET" -a -n "$WRK" ] && /bin/rm -r $WRK; Msg ${*:-Done}; }
+New() { local T; N=; for T do [ $T = $P ] && M=$M\ $T || N=$N\ $T; done; }
+Lst() {
+	local T
+	D=
+	for T do
+		case " $R " in
+		*\ $T\ *) Msg Cannot remove $T, required for $P;;
+		*) D=$D\ $T
+		esac
+	done
+	for T in $R; do case " $L " in *\ $T\ *);; *) L=$L\ $T;; esac; done
+}
+Get() {
+	local U
+	[ -z "$NET" ] || /bin/rm -f $SRC
+	if [ $# = 1 ]; then
+		SRC=$WRK/$1 U=$URL/$1
+	else
+		SRC=$WRK/$1#$2 U=$URL/$1${NET:-#}$2
+	fi
+	if [ -z "$NET" ]; then
+		[ -f $SRC -a -r $SRC ] || SRC=
+	else
+		/usr/bin/wget -qO $SRC $U || SRC=
+	fi
+	[ -n "$SRC" ] || Err Failure to get $U
+}
+Who() {
+	local U u G g H C T
+	U=$1 u=$2; shift 2
+	case $1 in ''|/*) G=$U g=$u;; *) G=$1 g=$2; shift 2;; esac
+	[ $# != 0 ] && H=$1 && shift || H=/
+	[ -f $DST/etc/passwd ] &&
+		T=$(/bin/sed "/^$G:/!d;s/.*/1/;q" $DST/etc/group
+		/bin/sed "/^$U:[^:]*:$u:$g:/!d;s/.*/2/;q" $DST/etc/passwd
+		/bin/sed "/^$U:/!d;s/.*/3/;q" $DST/etc/shadow) || T=
+	case $T in
+	1*2*3);;
+	'')	echo Creating user $U; [ -z "$CHK" ] ||
+		if [ -x /usr/sbin/useradd ]; then
+			/usr/sbin/groupadd ${DST:+-R $DST} -g $g $G
+			/usr/sbin/useradd ${DST:+-R $DST} -u $u -g $G -d $H \
+				-s '' -c "${1:-$U}" $U
+		else
+			echo "$G::$g:" >>$DST/etc/group
+			echo "$U:x:$u:$g:$*:$H:" >>$DST/etc/passwd
+			echo "$U:x:0::::::" >>$DST/etc/shadow
+		fi;;
+	*) T="User $U created with errors"; [ -z "$CHK" ] && Msg $T || Err $T
+	esac
+}
+CHK=
+DBD=/var/lib/pkg
+DST=
+NET=%23
+PWR=
+SRC=
+WRK=
+while getopts dfhr:su: V; do
+	case $V in
+	d)	SRC=-;;
+	f)	PWR=-f;;
+	h)	echo "$HLP"; exit 0;;
+	r)	DST=$OPTARG;;
+	s)	CHK=synchronized\ with;;
+	u)	URL=$OPTARG;;
+	?)	Err '\rUsage: pkguse [-r root] [-u url] [-dfs] [pkg ...]'
+	esac
+done
+shift $(($OPTIND - 1))
+for V do
+	case -$V- in
+	*--*|*[!a-zA-Z0-9_-]*|-[0-9_]*) Err Invalid package name $V!
+	esac
+done
+if [ -n "$DST" ]; then
+	[ -d $DST ] || Err $DST - no such directory!
+	case $DST in /*);; *) DST=$(pwd -P)/$DST;; esac
+	DBD=$DST$DBD
+fi
+case $URL in
+http://[a-z0-9]*|https://[a-z0-9]*|ftp://[a-z0-9]*);;
+*) [ -d $URL ] || Err $URL - no such directory!; NET= WRK=$URL
+esac
+D= L= M= N= U=
+[ -z "$SRC" ] && N=$* || D=$*
+[ ! -f $DBD/db ] || U=$(/bin/sed '${x;s/\n/ /g;q}
+	/\//d;/^$/d;/^lib64/d;N;s/\n/#/;H;d' $DBD/db)
+[ -n "$U$N" ] || Err Empty package list!
+for P in $U; do P=${P%#*}; case " $D " in *\ $P\ *);; *) L=$L\ $P;; esac; done
+Msg Packages are ${CHK:-compared to} $URL${DST:+ for $DST}
+set -e
+trap "End Terminated due to error!" 0
+trap "End Interrapted by signal!" 1 2 3 13 15
+if [ -n "$CHK" -a ! -f $DBD/db ]; then
+	/bin/mkdir -p $DBD && echo >$DBD/db || Err Failed create $DBD/db
+fi
+if [ -n "$NET" ]; then WRK=/tmp/.pkguse$$; /bin/mkdir $WRK; fi
+SRC=PKG.use V=$N
+Get $SRC
+while [ "$V" != "$L" ]; do
+	exec <$SRC
+	A= E= J= V=$L W=:
+	while read P R; do
+		case $P in
+		[a-z]*)	A=$P\ $A;;
+		+)	J=$R\ $J; continue;;
+		@)	W=:$R\ $W; continue;;
+		.*)	E=$P; continue
+		esac
+		P=${P%#*} R=$R\ $P
+		case " $L " in *\ $P\ *) Lst $D;; esac
+		case " $N " in *\ $P\ *) Lst $D; New $N;; esac
+	done
+done
+for P in $U; do P=${P%#*}; case " $A " in *\ $P#*);; *) D=$D\ $P;; esac; done
+for P in $D; do
+	case " $U " in
+	*\ $P#*) echo Remove $P
+		[ -z "$CHK" ] || /usr/bin/pkgrm ${DST:+-r $DST} $P;;
+	*)	Msg Unable to remove unknown package $P
+	esac
+done
+for P in $N; do Msg Unable to install unknown package $P; done
+for P in $A; do
+	N=${P%#*} V=${P#*#} T=
+	case " $L " in *\ $N\ *);; *) continue;; esac
+	case " $U " in
+	*\ $P\ *)	case " $M " in
+			*\ $N\ *) T=$V;;
+			*) [ -n "$DST" ] || continue
+			esac;;
+	*\ $N#*)	T=${U#*$N#} T=${T%% *};;
+	*) case " $W " in *\ :$N\ *) F=${W#*:$N } F=${F%%:*}; Who $F;; esac
+	esac
+	[ -n "$T" ] && echo Upgrade $N $T to $V || echo Install $N $V
+	if [ -n "$CHK" ]; then
+		Get $N $V$E
+		/usr/bin/pkgadd $PWR ${DST:+-r $DST} ${T:+-u} $SRC
+	fi
+	case " $J " in *\ $N\ *)
+		if [ -z "$DST" ]; then
+			echo Post-install $N $V
+			if [ -n "$CHK" ]; then
+				Get $N $V.post-install
+				/bin/sh $SRC
+			fi
+		else
+			Msg Run $N#$V.post-install to $DST directly
+		fi
+	esac
+done
+End
