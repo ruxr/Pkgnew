@@ -1,5 +1,5 @@
 #
-#	@(#) Makefile V1.19 (C) 2019 by Roman Oreshnikov
+#	@(#) Makefile V1.19.1 (C) 2019 by Roman Oreshnikov
 #
 BINDIR	= /usr/sbin
 MANDIR	= /usr/share/man/man8
@@ -36,8 +36,12 @@ all:
 
 install: $(BIN) $(MAN)
 	@echo "Install software"; set -e; \
-	$(INSTALL) -Dm 555 $(BIN) "$(DESTDIR)$(BINDIR)/$(BIN)"; \
-	$(INSTALL) -Dm 644 $(MAN) "$(DESTDIR)$(MANDIR)/$(MAN)"
+	for F in $(BIN); do \
+		$(INSTALL) -Dm 555 $$F "$(DESTDIR)$(BINDIR)/$$F"; \
+	done; \
+	for F in $(MAN); do \
+		$(INSTALL) -Dm 644 $$F "$(DESTDIR)$(MANDIR)/$$F"; \
+	done
 
 dist: Makefile $(SRC)
 	@set -e; \
