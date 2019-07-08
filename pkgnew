@@ -71,21 +71,25 @@ PortDepends() { # Pkgfile
 PortOptions() { # Pkgfile
 	/bin/sed -n 's/^# Post-install:/Run/p;s/^# Required user:/Who/p' $1
 }
-PortNewPkgfile() { # Repo Port
+PortPkgfile() { # Repo Port [Flag]
 	local A N P S
 	A=$1/$2/add-ons N=$TMP/$2 S=$1/$2/Pkgfile P=$S.patch
-	if ! /bin/cp -p $S $N; then
-		echo
-		exit
-	elif [ -f $P ]; then
-		[ $P -nt $S ] || echo \ old patch for $1/$2
-		/usr/bin/patch -fi $P $N >/dev/null || echo \ failed to patch $S
-		/bin/touch -r $P $N
+	if [ -z "$3" ]; then
+		if ! /bin/cp -p $S $N; then
+			echo % copy error; exit
+		elif [ -f $P ]; then
+			if [ ! $P -nt $S ]; then
+				echo % old patch for; exit
+			elif ! /usr/bin/patch -fi $P $N >/dev/null; then
+				echo % failed to patch; exit
+			fi
+			/bin/touch -r $P $N
+		fi
+		[ ! -d $A -o $N -nt $A ] || /bin/touch -r $A $N
+	else
+		N=./Pkgfile
 	fi
-	[ ! -d $A -o $N -nt $A ] || /bin/touch -r $A $N
-}
-PortChkPkgfile() { # Repo Port
-	/bin/bash -c "cd $1/$2; . ./Pkgfile
+	/bin/bash -c "cd $1/$2; . $N
 		if [ \$? != 0 ]; then	:
 		elif [ -z \"\$name\" ]; then	echo - name
 		elif [ -z \"\$version\" ]; then	echo - version
@@ -106,9 +110,10 @@ PortsList() { # List Port ...
 			D=${D##*/}
 			F=$D/$P/Pkgfile
 			[ -f $F ] || continue
-			set -- $(PortChkPkgfile $D $P)
+			set -- $(PortPkgfile $D $P $U)
 			case $1 in
 			'')	echo " runtime error $F";;
+			%)	shift; echo " $* $F";;
 			+)	echo " function '$2' not specified in $F";;
 			-)	echo " variable '$2' not specified in $F";;
 			=)	echo " variable '$2' has bad value '$3' in $F";;
@@ -116,7 +121,6 @@ PortsList() { # List Port ...
 					U=$D V=$1 R=$2
 					shift 2
 					echo $P $D $V-$R = $*
-					PortNewPkgfile $D $P
 					set -- $(PortAlso $TMP/$P)
 					[ $# = 0 ] || { A=$A\ $*; echo Pkg $*; }
 					set -- $(PortDepends $TMP/$P)
@@ -209,30 +213,17 @@ CheckSources() { # [Src ...]
 	for S in Pkgfile .footprint; do
 		[ ! -f $S ] || /bin/ln -s $PRT_DIR/$S $WRK_DIR
 	done
-	L=
 	for S do
 		case $S in */*) S=$SRC_DIR/${S##*/};; *) S=$PRT_DIR/$S;; esac
 		/bin/ln -s $S $WRK_DIR
-		L=$L\ ${S##*/}
 	done
-	if [ -f .signature ]; then
-		S=/usr/bin/signify L=/etc/ports/$DIR.pub
-		[ -x $S ] || End Failed check .signature. Missing $S!
-		[ -s $L ] && L=-p\ $L || L=
-		( cd $WRK_DIR; $S -qCx $PRT_DIR/.signature $L 2>&1 |
-			/usr/bin/sort | /bin/sed '
-				s/\(.*\): \(FAIL\)/\2 \1/;s/^F/\tF/;$q1'
-		) || End Verification .signature fail!
-	elif [ -f .md5sum -a -n "$L" ]; then
-		( cd $WRK_DIR; /usr/bin/md5sum $L | /bin/sed 's% .*/%  %' |
-			/usr/bin/sort -k2
-		) >$WRK_DIR/.md5sum
-		/usr/bin/sort -k2 .md5sum |
-			/usr/bin/diff -wtU0 - $WRK_DIR/.md5sum |
-				/bin/sed '/^@@/d;/^+++/d;/^---/d
-					s/^+/\tNEW\t/;s/^-/\tOLD\t/;$q1' >&2 ||
-						End Verification .md5sum fail!
-	fi
+	[ -f .signature ] || return 0
+	S=/usr/bin/signify L=/etc/ports/$DIR.pub
+	[ -x $S ] || End Failed check .signature. Missing $S!
+	[ -s $L ] && L=-p\ $L || L=
+	( cd $WRK_DIR; $S -qCx $PRT_DIR/.signature $L 2>&1 | /usr/bin/sort |
+		/bin/sed ' s/\(.*\): \(FAIL\)/\2 \1/;s/^F/\tF/;$q1'
+	) || End Verification .signature fail!
 }
 DownloadSources() { # [Src ...]
 	local N F
@@ -286,7 +277,7 @@ BuildAlso() { # Pkg ...
 }
 StripFiles() { # FilterList
 	local F P K
-        [ -f $1 ] && P="/usr/bin/grep -vf $1" || P=/bin/cat
+	[ -f $1 ] && P="/usr/bin/grep -vf $1" || P=/bin/cat
 	/usr/bin/find . -type f -printf "%P\n" | $P |
 	while read F; do
 		case $(/usr/bin/file -b $F) in
@@ -309,7 +300,7 @@ GzipManFiles() {
 	done
 }
 CreatePackages() { # Pkg ...
-	Msg packing
+	Msg pack
 	local P
 	for P do (
 		[ -d $P ] && cd $P && /usr/bin/bsdtar -caf ../$P#$VER$EXT *
