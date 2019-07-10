@@ -157,15 +157,10 @@ for P in $A; do
 		/usr/bin/pkgadd $PWR ${DST:+-r $DST} ${T:+-u} $SRC
 	fi
 	case " $J " in *\ $N\ *)
-		if [ -z "$DST" ]; then
-			echo Post-install $N $V
-			if [ -n "$CHK" ]; then
-				Get $N $V.post-install
-				/bin/sh $SRC
-			fi
-		else
-			Msg Run $N#$V.post-install to $DST directly
-		fi
+		echo Post-install $N $V
+		[ -n "$CHK" ] || continue
+		Get $N $V.post-install
+		/bin/sh $SRC $DST
 	esac
 done
 End
