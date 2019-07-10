@@ -24,6 +24,7 @@ Report bugs to <r.oreshnikov@gmail.com>"
 Wrn() { echo "pkgnew: $*" >&2; }
 End() { trap 0; Clock && echo "\t$*" >&2 || Wrn $*; exit 1; }
 Msg() { case $1 in [a-z]*) echo "\t  $*";; *) echo "\t$*"; esac >&2; }
+Inf() { echo -n "\r\t $*         " >&2; }
 Lst() { /usr/bin/pkginfo -i | /bin/sed "s/$1/$2/;H;\$!d;x;s/\n/ /g"; }
 Log() {
 	Clock
@@ -210,6 +211,7 @@ PortsOrder() {
 #
 CheckSources() { # [Src ...]
 	local L S
+	Inf check sources
 	for S in Pkgfile .footprint; do
 		[ ! -f $S ] || /bin/ln -s $PRT_DIR/$S $WRK_DIR
 	done
@@ -241,6 +243,7 @@ DownloadSources() { # [Src ...]
 }
 UnpackSources() { # [Src ...]
 	local F
+	Inf unpack sources
 	for F do
 		F=$WRK_DIR/${F##*/}
 		case $F in
@@ -257,7 +260,7 @@ CopyAdditionalSources() { # [Src ...]
 	for F do [ ! -f $F ] || /bin/cp $F $WRK_DIR/src; done
 }
 Build() {
-	Msg build
+	Inf build
 	/bin/bash -c "
 	[ -f .32bit ] && PKGMK_ARCH=32 || PKGMK_ARCH=64
 	. $TMP/$PRT
@@ -269,7 +272,7 @@ Build() {
 	build" >$LOG 2>&1 || Log
 }
 BuildAlso() { # Pkg ...
-	[ $# = 1 ] && return || Msg buildalso
+	[ $# = 1 ] && return || Inf buildalso
 	/bin/bash -c "
 	. $TMP/$PRT
 	set -ex
@@ -277,6 +280,7 @@ BuildAlso() { # Pkg ...
 }
 StripFiles() { # FilterList
 	local F P K
+	Inf strip
 	[ -f $1 ] && P="/usr/bin/grep -vf $1" || P=/bin/cat
 	/usr/bin/find . -type f -printf "%P\n" | $P |
 	while read F; do
@@ -291,6 +295,7 @@ StripFiles() { # FilterList
 }
 GzipManFiles() {
 	local F
+	Inf gzip mans
 	/usr/bin/find . -type f -path "*/man/man*/*" ! -name "*.gz" \
 		-exec /bin/gzip -9 {} \;
 	/usr/bin/find . -type l -path "*/man/man*/*" ! -name "*.gz" |
@@ -300,7 +305,7 @@ GzipManFiles() {
 	done
 }
 CreatePackages() { # Pkg ...
-	Msg pack
+	Inf pack
 	local P
 	for P do (
 		[ -d $P ] && cd $P && /usr/bin/bsdtar -caf ../$P#$VER$EXT *
@@ -309,7 +314,7 @@ CreatePackages() { # Pkg ...
 	/bin/mv *#$VER$EXT $PKG_DIR
 }
 CopyPostInstall() { # [File]
-	[ $# = 0 ] && return ||
+	[ $# = 0 ] && return || Inf copy post-install
 	[ -f $WRK_DIR/src/${1##*.} ] || End Missing file $WRK_DIR/src/${1##*.}!
 	/usr/bin/install -m644 $WRK_DIR/src/${1##*.} $PKG_DIR/$1
 }
@@ -335,7 +340,7 @@ Pkg() { # Dir Ver-Rel Pkg ... [+] [= Src ...]
 	local DIR VER PRT INF NEW PRT_DIR PKG_DIR SRC_DIR WRK_DIR F L P
 	DIR=$1 VER=$2 PRT=$3 PRT_DIR=$PORTS_DIR/$1/$3 INF=$1/$3\ $2 NEW= L= P=
 	[ ! -d $PRT_DIR/add-ons ] || INF=$INF\ add-ons
-	[ ! -f $PRT_DIR/Pkgfile.patch ] || INF=$INF\ patched
+	[ ! -f $PRT_DIR/Pkgfile.patch ] || INF=$INF\ patch
 	PKG_DIR=${PKGMK_PACKAGE_DIR:-$PRT_DIR}
 	SRC_DIR=${PKGMK_SOURCE_DIR:-$PRT_DIR}
 	[ -z "$PKGMK_WORK_DIR" ] && WRK_DIR=$PRT_DIR/work ||
