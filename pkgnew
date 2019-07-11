@@ -653,13 +653,15 @@ EditPatch() {
 	esac
 }
 CreateBuildList() {
+	local N
 	Msg Creating a list of required packages for building
-	NEW=$(Lst ' .*')\ $NEW
-	PortsList ALL $NEW | PortsOrder >$TMP/PKG.new ||
+	N=$(Lst ' .*')
+	PortsList ALL $N $NEW | PortsOrder >$TMP/PKG.new ||
 	case $? in
 	1) End Port collections need to be updated!;;
 	2) End Fail to create ports build list!
 	esac
+	for N in $NEW; do /bin/touch $TMP/$N; done
 }
 BuildPackages() {
 	case $CMD in
