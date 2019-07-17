@@ -24,7 +24,7 @@ Report bugs to <r.oreshnikov@gmail.com>"
 Wrn() { echo "pkgnew: $*" >&2; }
 End() { trap 0; Clock && echo "\t$*" >&2 || Wrn $*; exit 1; }
 Msg() { case $1 in [a-z]*) echo "\t  $*";; *) echo "\t$*"; esac >&2; }
-Inf() { echo -n "\r\t $*         " >&2; }
+Inf() { echo "\r\t  $*         \r\c" >&2; }
 Lst() { /usr/bin/pkginfo -i | /bin/sed "s/$1/$2/;H;\$!d;x;s/\n/ /g"; }
 Log() {
 	Clock
@@ -434,7 +434,6 @@ CreateUse() {
 	function Wrn(s) { print "\t  " s >"/dev/stderr" }
 	/^\//	{ Lib[$1] = n; next }
 	/^=/	{ n = $2; Val[n] = $3; Ord[++c] = n; next }
-	/^\./	{ Old = 1; next }
 	/^\+/	{ if($2 in Val) Run[$2] = $0; next }
 	/^@/	{ if($2 in Val) Who[$2] = $0; next }
 	/^-/	{
@@ -448,6 +447,7 @@ CreateUse() {
 			Val[n] = "0"
 			next
 		}
+	/^\./	{ Old = 1; next }
 	/^[A-Z]/ { if(Old) next; Ord[++c] = $1; Val[$1] = "0" }
 	{
 		if($1 ~ /#/) {
@@ -456,6 +456,7 @@ CreateUse() {
 			else next
 		} else {
 			n = $1
+			delete Dep[n]
 			delete Run[n]
 			delete Who[n]
 		}
@@ -531,7 +532,7 @@ Time() { # Time
 	*:?:??) M=0$M;;
 	*:??:?) S=0$S
 	esac
-	echo -n "\r$H:$M:$S\r" >&2
+	echo "\r$H:$M:$S\r\c" >&2
 }
 Clock() {
 	case $1 in
@@ -703,7 +704,7 @@ BuildPackages() {
 		:L /[ \t][ \t]*\\$/{N;b L};s/[ \t][ \t]*\\\n/ /g
 		s/[ \t]*#.*//;s/[ \t][ \t]*/ /g' $PORTS_DIR/PKG.grp
 	for R in $USE; do
-		echo -n "- "
+		echo "- \c"
 		/usr/bin/find ${R##*/} -maxdepth 1 -type d -printf '%f '
 		echo
 	done
