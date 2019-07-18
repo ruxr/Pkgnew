@@ -712,7 +712,7 @@ BuildPackages() {
 	/bin/cat $TMP/Pkg
 	} | CreateUse >$TMP/PKG.use
 	/bin/sed -i "1!G;h;\$!d;s/\$/\n$EXT/" $TMP/PKG.use
-	/bin/mv $TMP/PKG.* $PKG_DIR
+	/bin/cp $TMP/PKG.* $PKG_DIR
 	[ $PKG_DIR = $PORTS_DIR ] ||
 		/bin/rm -f $PORTS_DIR/PKG.new $PORTS_DIR/PKG.use
 }
