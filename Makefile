@@ -1,5 +1,5 @@
 #
-#	@(#) Makefile V1.19.3 (C) 2019 by Roman Oreshnikov
+#	@(#) Makefile V1.19.4 (C) 2019 by Roman Oreshnikov
 #
 BINDIR	= /usr/sbin
 MANDIR	= /usr/share/man/man8
@@ -9,13 +9,13 @@ MANDIR	= /usr/share/man/man8
 #
 NAME	= Shell scripts for CRUX-3.5 packages administration
 
-BZIP2	= /usr/bin/bzip2
 CP	= /bin/cp
 DATE	= /bin/date
 INSTALL	= /usr/bin/install
 MKDIR	= /bin/mkdir
 SED	= /bin/sed
 TAR	= /bin/tar
+XZ	= /usr/bin/xz
 
 BIN	= pkgnew pkguse
 MAN	= pkgnew.8 pkguse.8
@@ -46,7 +46,7 @@ install: $(BIN) $(MAN)
 dist: Makefile $(SRC)
 	@set -e; \
 	D=`$(SED) '/@(#)/!d;s/^.*V\([^ ]*\).*/Pkgnew-\1/;q' Makefile`; \
-	echo "Create $$D.tar.bz2"; \
+	echo "Create $$D.tar.xz"; \
 	[ ! -d "$$D" ] || $(RM) -rf "$$D"; $(MKDIR) "$$D"; \
 	$(CP) Makefile "$$D"; \
 	V=`$(SED) '/@(#)/!d;s/^.*\(V.*\)$$/\1/;q' Makefile`; \
@@ -56,4 +56,4 @@ dist: Makefile $(SRC)
 	C=$${V#* * } V=$${V#*V} V=$${V%% *}; Y=`$(DATE) +%Y`; \
 	$(SED) -i "1s/\(.TH [^ ]* 8\) .*/\1 $$Y $$V/;\$$s/.*/Copyright $$C/" \
 		$$D/*.8; \
-	$(TAR) cf - --remove-files "$$D" | $(BZIP2) -9c >"$$D.tar.bz2"
+	$(TAR) cf - --remove-files "$$D" | $(XZ) -9c >"$$D.tar.xz"
