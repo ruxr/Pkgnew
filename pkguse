@@ -116,8 +116,8 @@ if [ -n "$CHK" -a ! -f $DBD/db ]; then
 	/bin/mkdir -p $DBD && echo >$DBD/db || Err Failed create $DBD/db
 fi
 if [ -n "$NET" ]; then WRK=/tmp/.pkguse$$; /bin/mkdir $WRK; fi
-SRC=PKG.use V=$N
-Get $SRC
+SRC= V=$N
+Get PKG.use
 while [ "$V" != "$L" ]; do
 	exec <$SRC
 	A= E= J= V=$L W=:
