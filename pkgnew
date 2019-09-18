@@ -224,7 +224,7 @@ CheckSources() { # [Src ...]
 	[ -x $S ] || End Failed check .signature. Missing $S!
 	[ -s $L ] && L=-p\ $L || L=
 	( cd $WRK_DIR; $S -qCx $PRT_DIR/.signature $L 2>&1 | /usr/bin/sort |
-		/bin/sed ' s/\(.*\): \(FAIL\)/\2 \1/;s/^F/\tF/;$q1'
+		/bin/sed '1s/^/\n/;$q1'
 	) || End Verification .signature fail!
 }
 DownloadSources() { # [Src ...]
