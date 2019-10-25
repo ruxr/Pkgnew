@@ -57,7 +57,7 @@ Who() {
 	case $T in
 	1*2*3);;
 	'')	echo Creating user $U; [ -z "$CHK" ] ||
-		if [ -x /usr/sbin/useradd ]; then
+		if [ -x $DST/usr/sbin/useradd ]; then
 			/usr/sbin/groupadd ${DST:+-R $DST} -g $g $G
 			/usr/sbin/useradd ${DST:+-R $DST} -u $u -g $G -d $H \
 				-s '' -c "${1:-$U}" $U
