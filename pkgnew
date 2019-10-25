@@ -631,6 +631,7 @@ EditPatch() {
 	local D P R S
 	D=$TMP/$1 S=
 	for R in $USE; do
+		R=$PORTS_DIR/$R
 		if [ -f $R/$1/Pkgfile ]; then S=$R/$1/Pkgfile; break; fi
 	done
 	[ -n "$S" ] && P=$S.patch || End Port $1 not found!
@@ -796,10 +797,10 @@ TMP=/tmp/.pkgnew
 LOG=$TMP/Log
 /bin/rm -rf $TMP
 /bin/mkdir -p $TMP
-cd $PORTS_DIR
 case $CMD in
 [ep])	EditPatch $1;;
 *)	Clock start
+	cd $PORTS_DIR
 	UpdateCollections
 	CreateBuildList
 	BuildPackages
