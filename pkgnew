@@ -795,8 +795,10 @@ ReadConfig /etc/pkgmk.conf
 GetCollectionsList
 TMP=/tmp/.pkgnew
 LOG=$TMP/Log
-/bin/rm -rf $TMP
 /bin/mkdir -p $TMP
+(
+/usr/bin/flock -n 9 || End Аnother task is running
+/bin/rm -f $TMP/*
 case $CMD in
 [ep])	EditPatch $1;;
 *)	Clock start
@@ -809,5 +811,6 @@ case $CMD in
 	Msg Successful completion
 	CheckReject
 esac
-/bin/rm -rf $TMP
+/bin/rm -r $TMP
+) 9<$TMP
 trap 0
