@@ -21,16 +21,16 @@ Report bugs to <r.oreshnikov@gmail.com>"
 #
 # Common subroutines
 #
-Wrn() { echo "pkgnew: $*" >&2; }
-End() { trap 0; Clock && echo "\t$*" >&2 || Wrn $*; exit 1; }
-Msg() { case $1 in [a-z]*) echo "\t  $*";; *) echo "\t$*"; esac >&2; }
-Inf() { echo "\r\t  $*         \r\c" >&2; }
+Wrn() { echo "\rpkgnew: $*" >&2; }
+End() { trap 0; Clock; Wrn $*; exit 1; }
+CEL="\r\t\033[K"
+Msg() { case $1 in [a-z]*) echo "$CEL  $*";; *) echo "$CEL$*"; esac >&2; }
 Lst() { /usr/bin/pkginfo -i | /bin/sed "s/$1/$2/;H;\$!d;x;s/\n/ /g"; }
 Log() {
 	Clock
-	Msg Interupted due to error!
-	/usr/bin/tail $LOG
-	End The full log is in the file $LOG
+	Wrn Last 10 lines from the full log file $LOG
+	/usr/bin/tail $LOG >&2
+	exit 1
 }
 Ask() {
 	local A
@@ -211,7 +211,7 @@ PortsOrder() {
 #
 CheckSources() { # [Src ...]
 	local L S
-	Inf check sources
+	Msg check sources\\c
 	for S in Pkgfile .footprint; do
 		[ ! -f $S ] || /bin/ln -s $PRT_DIR/$S $WRK_DIR
 	done
@@ -233,17 +233,18 @@ DownloadSources() { # [Src ...]
 		case $F in */*);; *) continue;; esac
 		N=$SRC_DIR/${F##*/}
 		[ -s $N ] && continue
-		Msg wget $F
+		Msg wget ${F##*/}
 		case $CMD in
-		*d*) /usr/bin/wget -cqO $N.partial $F &&
-			/bin/mv $N.partial $N || End Failed download ${F##*/}!;;
-		*b*) End Download disabled!
+		*d*)	Msg download\\c
+			/usr/bin/wget -cqO $N.partial $F &&
+			/bin/mv $N.partial $N || End Failed download $F!;;
+		*b*)	End Download disabled!
 		esac
 	done
 }
 UnpackSources() { # [Src ...]
 	local F
-	Inf unpack sources
+	Msg unpack sources\\c
 	for F do
 		F=$WRK_DIR/${F##*/}
 		case $F in
@@ -260,7 +261,7 @@ CopyAdditionalSources() { # [Src ...]
 	for F do [ ! -f $F ] || /bin/cp $F $WRK_DIR/src; done
 }
 Build() {
-	Inf build
+	Msg build\\c
 	/bin/bash -c "
 	[ -f .32bit ] && PKGMK_ARCH=32 || PKGMK_ARCH=64
 	. $TMP/$PRT
@@ -272,7 +273,7 @@ Build() {
 	build" >$LOG 2>&1 || Log
 }
 BuildAlso() { # Pkg ...
-	[ $# = 1 ] && return || Inf buildalso
+	[ $# = 1 ] && return || Msg buildalso\\c
 	/bin/bash -c "
 	. $TMP/$PRT
 	set -ex
@@ -280,7 +281,7 @@ BuildAlso() { # Pkg ...
 }
 StripFiles() { # FilterList
 	local F P K
-	Inf strip
+	Msg strip\\c
 	[ -f $1 ] && P="/usr/bin/grep -vf $1" || P=/bin/cat
 	/usr/bin/find . -type f -printf "%P\n" | $P |
 	while read F; do
@@ -295,7 +296,7 @@ StripFiles() { # FilterList
 }
 GzipManFiles() {
 	local F
-	Inf gzip mans
+	Msg gzip mans\\c
 	/usr/bin/find . -type f -path "*/man/man*/*" ! -name "*.gz" \
 		-exec /bin/gzip -9 {} \;
 	/usr/bin/find . -type l -path "*/man/man*/*" ! -name "*.gz" |
@@ -305,7 +306,7 @@ GzipManFiles() {
 	done
 }
 CreatePackages() { # Pkg ...
-	Inf pack
+	Msg pack\\c
 	local P
 	for P do (
 		[ -d $P ] && cd $P && /usr/bin/bsdtar -caf ../$P#$VER$EXT *
@@ -314,7 +315,7 @@ CreatePackages() { # Pkg ...
 	/bin/mv *#$VER$EXT $PKG_DIR
 }
 CopyPostInstall() { # [File]
-	[ $# = 0 ] && return || Inf copy post-install
+	[ $# = 0 ] && return || Msg copy post-install\\c
 	[ -f $WRK_DIR/src/${1##*.} ] || End Missing file $WRK_DIR/src/${1##*.}!
 	/usr/bin/install -m644 $WRK_DIR/src/${1##*.} $PKG_DIR/$1
 }
@@ -326,7 +327,7 @@ InstallPackages() { # Pkg ...
 		*\ $P#*) F=-u;;
 		*) F=
 		esac
-		[ -n "$NEW" ] || Msg "- $INF"
+		[ -n "$NEW" ] || Msg - $INF
 		NEW=y
 		Msg pkgadd $F $P#$VER$EXT
 		[ -z "$CMD" ] || /usr/bin/pkgadd $F $PKG_DIR/$P#$VER$EXT
@@ -356,7 +357,7 @@ Pkg() { # Dir Ver-Rel Pkg ... [+] [= Src ...]
 		shift
 	done
 	if [ -n "$NEW" ]; then
-		Msg "+ $INF"
+		Msg + $INF
 		DownloadSources $*
 		case $CMD in *b*)
 			/bin/rm -rf $WRK_DIR
@@ -394,11 +395,11 @@ Who() { # Pkg User Uid [Group Gid] [Home [Comment]]
 		/bin/sed "/^$U:[^:]*:$u:$g:/!d;s/.*/2/;q" /etc/passwd
 		/bin/sed "/^$U:/!d;s/.*/3/;q" /etc/shadow) in
 	1*2*3);;
-	'')	Msg "@ $C"
+	'')	Msg @ $C
 		[ -z "$CMD" ] && return || /usr/sbin/groupadd -g $g $G
 		/usr/sbin/useradd -u $u -g $G -d $H -s '' -c "${*:-$U}" $U;;
 	*)	H="$U installed with errors"
-		[ -z "$CMD" ] && Msg "! user" $H || End User $H!
+		[ -z "$CMD" ] && Msg ! user $H || End User $H!
 	esac
 }
 CleanList() {
@@ -536,16 +537,15 @@ Time() { # Time
 }
 Clock() {
 	case $1 in
-	start)	[ -z "$PID" ] || return
-		ClockStart=$(/bin/date +%s)
+	start)	ClockStart=$(/bin/date +%s)
 		Time 0
 		local T
-		while :; do sleep 5; T=$(($T + 5)); Time $T; done &
+		while :; do /bin/sleep 5; T=$(($T + 5)); Time $T; done &
 		PID=$!;;
-	*)	[ -n "$PID" ] || return
-		kill $PID
+	*)	[ -z "$PID" ] && return || kill $PID
 		PID=
 		Time $(($(/bin/date +%s) - $ClockStart))
+		[ $# = 0 ] && echo >&2 || Msg $*
 	esac
 }
 ChkDir() { # Var Dir
@@ -622,7 +622,7 @@ UpdateCollections() {
 	for C in $UPD; do
 		D=${C#*.} C=${C%%.*}
 		case " $NEW " in *\ $C\ *|*\ $C.$D\ *);; *) continue;; esac
-		Msg updating collection $C
+		Msg updating collection $C\\c
 		/etc/ports/drivers/$D /etc/ports/$C.$D >>$LOG 2>&1 || Log
 	done
 	C=${CMD%u*} CMD=$C${CMD#*u} NEW=
@@ -761,6 +761,7 @@ CheckReject() {
 # Main
 #
 CMD=
+PID=
 while getopts bdehpuz NEW; do
 	case $NEW in
 	h) echo "$HLP"; exit;;
@@ -789,15 +790,15 @@ export LANG=C
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 export SHELL=/bin/sh
 set -e
-trap "End Interupted by error!" 0
-trap "End Interupted by signal!" 1 2 3 13 15
+trap "End Terminated due an error!" 0
+trap "End Interrupted by signal!" 1 2 3 13 15
 ReadConfig /etc/pkgmk.conf
 GetCollectionsList
 TMP=/tmp/.pkgnew
 LOG=$TMP/Log
 /bin/mkdir -p $TMP
 {
-/usr/bin/flock -n 9 || End Аnother task is running
+/usr/bin/flock -n 9 || End Аnother task is running!
 /bin/rm -f $TMP/*
 case $CMD in
 [ep])	EditPatch $1;;
@@ -807,8 +808,7 @@ case $CMD in
 	CreateBuildList
 	BuildPackages
 	DeleteUnused
-	Clock stop
-	Msg Successful completion
+	Clock Successful completion
 	CheckReject
 esac
 /bin/rm -r $TMP
