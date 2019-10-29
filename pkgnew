@@ -796,7 +796,7 @@ GetCollectionsList
 TMP=/tmp/.pkgnew
 LOG=$TMP/Log
 /bin/mkdir -p $TMP
-(
+{
 /usr/bin/flock -n 9 || End Аnother task is running
 /bin/rm -f $TMP/*
 case $CMD in
@@ -812,5 +812,5 @@ case $CMD in
 	CheckReject
 esac
 /bin/rm -r $TMP
-) 9<$TMP
+} 9<$TMP
 trap 0
