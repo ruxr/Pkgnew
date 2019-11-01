@@ -22,13 +22,13 @@ Report bugs to <r.oreshnikov@gmail.com>"
 # Common subroutines
 #
 Wrn() { echo "\rpkgnew: $*" >&2; }
-End() { trap 0; Clock; Wrn $*; exit 1; }
+End() { trap 0; Clock $* || Wrn $*; exit 1; }
 CEL="\r\t\033[K"
 Msg() { case $1 in [a-z]*) echo "$CEL  $*";; *) echo "$CEL$*"; esac >&2; }
+Inf() { echo "$CEL  $*\r\c" >&2; }
 Lst() { /usr/bin/pkginfo -i | /bin/sed "s/$1/$2/;H;\$!d;x;s/\n/ /g"; }
 Log() {
-	Clock
-	Wrn Last 10 lines from the full log file $LOG
+	Clock Last 10 lines from the full log file $LOG
 	/usr/bin/tail $LOG >&2
 	exit 1
 }
@@ -211,7 +211,7 @@ PortsOrder() {
 #
 CheckSources() { # [Src ...]
 	local L S
-	Msg check sources\\c
+	Inf check sources
 	for S in Pkgfile .footprint; do
 		[ ! -f $S ] || /bin/ln -s $PRT_DIR/$S $WRK_DIR
 	done
@@ -233,18 +233,18 @@ DownloadSources() { # [Src ...]
 		case $F in */*);; *) continue;; esac
 		N=$SRC_DIR/${F##*/}
 		[ -s $N ] && continue
-		Msg wget ${F##*/}
+		Inf wget ${F##*/}
 		case $CMD in
-		*d*)	Msg download\\c
-			/usr/bin/wget -cqO $N.partial $F &&
+		*d*) /usr/bin/wget -cqO $N.partial $F &&
 			/bin/mv $N.partial $N || End Failed download $F!;;
-		*b*)	End Download disabled!
+		*b*) End Download disabled!
 		esac
+		echo >&2
 	done
 }
 UnpackSources() { # [Src ...]
 	local F
-	Msg unpack sources\\c
+	Inf unpack sources
 	for F do
 		F=$WRK_DIR/${F##*/}
 		case $F in
@@ -261,7 +261,7 @@ CopyAdditionalSources() { # [Src ...]
 	for F do [ ! -f $F ] || /bin/cp $F $WRK_DIR/src; done
 }
 Build() {
-	Msg build\\c
+	Inf build
 	/bin/bash -c "
 	[ -f .32bit ] && PKGMK_ARCH=32 || PKGMK_ARCH=64
 	. $TMP/$PRT
@@ -273,7 +273,7 @@ Build() {
 	build" >$LOG 2>&1 || Log
 }
 BuildAlso() { # Pkg ...
-	[ $# = 1 ] && return || Msg buildalso\\c
+	[ $# = 1 ] && return || Inf buildalso
 	/bin/bash -c "
 	. $TMP/$PRT
 	set -ex
@@ -281,7 +281,7 @@ BuildAlso() { # Pkg ...
 }
 StripFiles() { # FilterList
 	local F P K
-	Msg strip\\c
+	Inf strip
 	[ -f $1 ] && P="/usr/bin/grep -vf $1" || P=/bin/cat
 	/usr/bin/find . -type f -printf "%P\n" | $P |
 	while read F; do
@@ -296,7 +296,7 @@ StripFiles() { # FilterList
 }
 GzipManFiles() {
 	local F
-	Msg gzip mans\\c
+	Inf gzip mans
 	/usr/bin/find . -type f -path "*/man/man*/*" ! -name "*.gz" \
 		-exec /bin/gzip -9 {} \;
 	/usr/bin/find . -type l -path "*/man/man*/*" ! -name "*.gz" |
@@ -306,7 +306,7 @@ GzipManFiles() {
 	done
 }
 CreatePackages() { # Pkg ...
-	Msg pack\\c
+	Inf pack
 	local P
 	for P do (
 		[ -d $P ] && cd $P && /usr/bin/bsdtar -caf ../$P#$VER$EXT *
@@ -315,7 +315,7 @@ CreatePackages() { # Pkg ...
 	/bin/mv *#$VER$EXT $PKG_DIR
 }
 CopyPostInstall() { # [File]
-	[ $# = 0 ] && return || Msg copy post-install\\c
+	[ $# = 0 ] && return || Inf copy post-install
 	[ -f $WRK_DIR/src/${1##*.} ] || End Missing file $WRK_DIR/src/${1##*.}!
 	/usr/bin/install -m644 $WRK_DIR/src/${1##*.} $PKG_DIR/$1
 }
@@ -542,10 +542,11 @@ Clock() {
 		local T
 		while :; do /bin/sleep 5; T=$(($T + 5)); Time $T; done &
 		PID=$!;;
-	*)	[ -z "$PID" ] && return || kill $PID
+	*)	[ -n "$PID" ] || return
+		kill $PID
 		PID=
 		Time $(($(/bin/date +%s) - $ClockStart))
-		[ $# = 0 ] && echo >&2 || Msg $*
+		Msg $*
 	esac
 }
 ChkDir() { # Var Dir
@@ -622,7 +623,7 @@ UpdateCollections() {
 	for C in $UPD; do
 		D=${C#*.} C=${C%%.*}
 		case " $NEW " in *\ $C\ *|*\ $C.$D\ *);; *) continue;; esac
-		Msg updating collection $C\\c
+		Inf updating collection $C
 		/etc/ports/drivers/$D /etc/ports/$C.$D >>$LOG 2>&1 || Log
 	done
 	C=${CMD%u*} CMD=$C${CMD#*u} NEW=
