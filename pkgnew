@@ -702,14 +702,14 @@ BuildPackages() {
 	{
 	/bin/sed -n '/^$/d;/^lib64$/d;/\//{s%^%/%;/\.so\./p;/\.so$/p;d}
 		N;s%\n% %;s%^%= %p' /var/lib/pkg/db
-	[ -s $PORTS_DIR/PKG.grp ] && /bin/sed '/^[ \t]*\(#.*\)*$/d
-		:L /[ \t][ \t]*\\$/{N;b L};s/[ \t][ \t]*\\\n/ /g
-		s/[ \t]*#.*//;s/[ \t][ \t]*/ /g' $PORTS_DIR/PKG.grp
 	for R in $USE; do
 		echo "- \c"
 		/usr/bin/find ${R##*/} -maxdepth 1 -type d -printf '%f '
 		echo
 	done
+	[ -s $PORTS_DIR/PKG.grp ] && /bin/sed '/^[ \t]*\(#.*\)*$/d
+		:L /[ \t][ \t]*\\$/{N;b L};s/[ \t][ \t]*\\\n/ /g
+		s/[ \t]*#.*//;s/[ \t][ \t]*/ /g' $PORTS_DIR/PKG.grp
 	[ -f $PKG_DIR/PKG.use ] && /bin/sed '1!G;h;$!d' $PKG_DIR/PKG.use
 	/bin/cat $TMP/Pkg
 	} | CreateUse >$TMP/PKG.use
@@ -779,7 +779,7 @@ case $#$CMD in 1[ep]);; *[ep]) End Option -$CMD requires one argument!;; esac
 case $CMD in *u*) HLP=collection;; *) HLP=port;; esac
 for NEW do
 	case -$NEW- in
-	*--*|*[!a-z0-9_-]*|-[0-9_]*) End "Invalid $HLP name '$NEW'!"
+	*--*|*[!a-z0-9_+-]*|-[0-9_+-]*) End "Invalid $HLP name '$NEW'!"
 	esac
 done
 [ $(/usr/bin/id -u) = 0 ] || End It can only do root!
