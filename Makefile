@@ -1,5 +1,5 @@
 #
-#	@(#) Makefile V1.19.8 (C) 2019 by Roman Oreshnikov
+#	@(#) Makefile V1.19.9 (C) 2019 by Roman Oreshnikov
 #
 BINDIR	= /usr/sbin
 MANDIR	= /usr/share/man/man8
