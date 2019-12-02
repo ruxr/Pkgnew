@@ -137,8 +137,9 @@ An example of splitting
 .I core/acl
 port into a main package and a developer package:
 
-  # pkgnew -e acl
-  {insert next lines}
+Need insert the following code to
+.IR core/acl/Pkgfile :
+
   # Build also: acl-dev
   buildalso() {
     mkdir -p $name-dev/usr/{lib,share/man}
@@ -146,7 +147,13 @@ port into a main package and a developer package:
     mv $name/usr/lib/*.{a,la} $name/usr/lib/pkgconfig $name-dev/usr/lib
     mv $name/usr/share/man/man3 $name-dev/usr/share/man
   }
-  :x
+
+Rebuild
+.I core/acl
+port:
+
+  # pkgnew -e acl
+  {pasting the previous code with your favorite editor}
   pkgnew: Create a patch for the original Pkgfile? [N/y] y
   # pkgnew -b
 .SH EXIT STATUS
@@ -166,9 +173,6 @@ Package build description.
 .TP
 .I Pkgfile.patch
 Patch for build description.
-.TP
-.I .md5sum
-MD5 checksum of source files.
 .TP
 .I .signature
 SHA256 checksum and signify checksum.
@@ -198,7 +202,7 @@ Resulting script used to build and install packages.
 Resulting list of packages in order of dependencies to install with
 .BR pkguse .
 .TP
-.I wget
+.I /usr/bin/wget
 Used by
 .B pkgnew
 to download source code.
