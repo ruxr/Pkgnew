@@ -108,7 +108,6 @@ PortsList() { # List Port ...
 		case " $A " in *\ $P\ *) continue;; esac
 		U=
 		for D in $USE; do
-			D=${D##*/}
 			F=$D/$P/Pkgfile
 			[ -f $F ] || continue
 			set -- $(PortPkgfile $D $P $U)
@@ -308,9 +307,9 @@ GzipManFiles() {
 CreatePackages() { # Pkg ...
 	Inf pack
 	local P
-	for P do (
-		[ -d $P ] && cd $P && /usr/bin/bsdtar -caf ../$P#$VER$EXT *
-		) || End Failed to create package $P#$VER$EXT!
+	for P do
+		( cd $P && /usr/bin/bsdtar -caf ../$P#$VER$EXT *) ||
+			 End Failed to create package $P#$VER$EXT!
 	done
 	/bin/mv *#$VER$EXT $PKG_DIR
 }
@@ -327,7 +326,7 @@ InstallPackages() { # Pkg ...
 		*\ $P#*) F=-u;;
 		*) F=
 		esac
-		[ -n "$NEW" ] || Msg - $INF
+		[ "x$NEW" = xy ] || Msg - $INF
 		NEW=y
 		Msg pkgadd $F $P#$VER$EXT
 		[ -z "$CMD" ] || /usr/bin/pkgadd $F $PKG_DIR/$P#$VER$EXT
@@ -337,9 +336,18 @@ RunPostInstall() { # [File]
 	[ -z "$1" -o -z "$NEW" ] && return || Msg sh $1
 	[ -z "$CMD" ] || /bin/sh $PKG_DIR/$1
 }
+PkgDepends() { # Pkg
+	[ -z "$CMD" -o -z "$NEW" ] && return || Inf create $DEP
+	while [ $# != 0 ]; do
+		echo $1 ${1%-dev} $(CheckPkgFiles $1); shift
+	done >$DEP~
+	[ -s $DEP~ ] || End Failed to create $DEP!
+	/bin/mv $DEP~ $DEP
+}
 Pkg() { # Dir Ver-Rel Pkg ... [+] [= Src ...]
-	local DIR VER PRT INF NEW PRT_DIR PKG_DIR SRC_DIR WRK_DIR F L P
+	local DEP DIR INF NEW PKG_DIR PRT PRT_DIR SRC_DIR VER WRK_DIR F L P
 	DIR=$1 VER=$2 PRT=$3 PRT_DIR=$PORTS_DIR/$1/$3 INF=$1/$3\ $2 NEW= L= P=
+	DEP=$PRT_DIR/.pkguse
 	[ ! -d $PRT_DIR/add-ons ] || INF=$INF\ add-ons
 	[ ! -f $PRT_DIR/Pkgfile.patch ] || INF=$INF\ patch
 	PKG_DIR=${PKGMK_PACKAGE_DIR:-$PRT_DIR}
@@ -360,7 +368,7 @@ Pkg() { # Dir Ver-Rel Pkg ... [+] [= Src ...]
 		Msg + $INF
 		DownloadSources $*
 		case $CMD in *b*)
-			/bin/rm -rf $WRK_DIR
+			/bin/rm -rf $WRK_DIR $DEP
 			/bin/mkdir -p $WRK_DIR/src $WRK_DIR/pkg
 			cd $PRT_DIR
 			CheckSources $*
@@ -378,10 +386,13 @@ Pkg() { # Dir Ver-Rel Pkg ... [+] [= Src ...]
 			cd $PORTS_DIR
 			/bin/rm -r $WRK_DIR
 		esac
+	elif [ ! -s $DEP ]; then
+		NEW=r
 	fi
 	case $CMD in ''|*b*)
 		InstallPackages $L
 		RunPostInstall $P
+		PkgDepends $L
 	esac
 }
 Who() { # Pkg User Uid [Group Gid] [Home [Comment]]
@@ -415,73 +426,71 @@ CleanList() {
 CheckPkgFiles() { # Pkg
 	/usr/bin/pkginfo -l $1 | CleanList |
 	while read F; do
+		echo \ $F
 		case $(/usr/bin/file -b $F) in
 		*ELF*) /usr/bin/ldd $F 2>/dev/null | /bin/sed '
 			/\//!d;s%^[^/]*/%/%;s/ .*//;s%/\./%/%g;s%[^/]*/\.\./%%g
 			s%^/lib64/%/lib/%;s%^\(/usr/lib\)64/%\1/%';;
-		*[Pp]erl*) echo perl;;
-		*[Pp]ython*) echo python
+		*[Pp]erl*) echo /usr/bin/perl;;
+		*[Pp]ython*) echo /usr/bin/python
 		esac
-	done | /usr/bin/sort -u
+	done | /usr/bin/awk '{ if($0 ~ /^\//) U[$1] = $1; else L[$1] = $1 }
+		END{ asort(U); for(n in U) { n = U[n]; if(!(n in L)) print n }}'
 }
 CreateUse() {
 	/usr/bin/awk '
+	BEGIN {
+		Lib["/usr/bin/perl"] = "perl"
+		Lib["/usr/bin/python"] = "python"
+		Val[Ord[++c] = "ALL"] = "0"
+	}
+	function All(n) { Dep["ALL"] = Dep["ALL"] " " n }
 	function Out(n) {
 			if(n in Who) print Who[n]
 			print n "#" Val[n] Dep[n]
 			if(n in Run) print Run[n]
 			delete Val[n]
 		}
-	function Wrn(s) { print "\t  " s >"/dev/stderr" }
+	function Err(s) { E++; print "\t  " s >"/dev/stderr" }
+	function Str(u) {
+			n = $1; u["filesystem"] = 0
+			for(i = 1; ++i <= NF;) {
+				if($i in Val) u[$i] = 0
+				else if(Lib[$i]) u[Lib[$i]] = 0
+				else if($i ~ /\//) Use[$i] = Use[$i] " " n
+				else Pkg[$i] = Pkg[$i] " " n
+			}
+			delete u[n]
+			for(i in u) { Dep[n] = Dep[n] " " i; Req[i]++ }
+		}
 	/^\//	{ Lib[$1] = n; next }
-	/^=/	{ n = $2; Val[n] = $3; Ord[++c] = n; next }
-	/^\+/	{ if($2 in Val) Run[$2] = $0; next }
-	/^@/	{ if($2 in Val) Who[$2] = $0; next }
-	/^-/	{
+	/^=/	{ Val[Ord[++c] = n = $2] = $3; All(n); next }
+	/^Pkg/	{
+			if(/ \+ /) Run[$4] = "+ " $4
+			f = $2 "/" $4 "/.pkguse"
+			while(g = getline < f) {
+				if(g == -1) { Err("Missing file " f); break }
+				Str()
+			}
+			next
+		}
+	/^Who/	{ $1 = "@"; Who[$2] = $0; next }
+	/^[A-Z]/ { Val[Ord[++c] = $1] = "0"; Str(); next }
+		{
 			delete u
-			for(n = 2; ++n <= NF;) if($n in Val) u[$n] = $n
+			for(n = 1; ++n <= NF;) if($n in Val) u[$n] = $n
 			asort(u)
 			l = ""
 			for(n in u) l = l " " u[n]
-			Ord[++c] = n = toupper($2)
+			Val[Ord[++c] = n = toupper($1)] = "0"
 			Grp[n] = Dep[n] = l
-			Val[n] = "0"
-			next
+			All(n)
 		}
-	/^\./	{ Old = 1; next }
-	/^[A-Z]/ { if(Old) next; Ord[++c] = $1; Val[$1] = "0" }
-	{
-		if($1 ~ /#/) {
-			split($1, a, /#/)
-			if(a[1] in Val) n = a[1]
-			else next
-		} else {
-			n = $1
-			delete Dep[n]
-			delete Run[n]
-			delete Who[n]
-		}
-		delete u
-		u["filesystem"] = 0
-		for(i = 1; ++i <= NF;) {
-			if($i in Val) u[$i] = 0
-			else if(Lib[$i]) u[Lib[$i]] = 0
-			else if($i ~ /\//) Use[$i] = Use[$i] " " n
-			else Pkg[$i] = Pkg[$i] " " n
-		}
-		delete u[n]
-		for(i in u) { Dep[n] = Dep[n] " " i; Req[i]++ }
-	}
 	END {
 		delete Lib
-		for(n in Pkg) Wrn("missing package " n " required by" Pkg[n])
-		for(n in Use) Wrn("missing library " n " required by" Use[n])
+		for(n in Pkg) Err("missing package " n " required by" Pkg[n])
+		for(n in Use) Err("missing library " n " required by" Use[n])
 		if(E) exit 1
-		l = ""
-		for(i in Val) l = l " " i
-		Ord[++c] = n = "ALL"
-		Dep[n] = l
-		Val[n] = "0"
 		for(n in Val) {
 			delete s
 			split(Dep[n], a)
@@ -520,7 +529,7 @@ CreateUse() {
 				if(j) Out(n)
 			}
 		} while(j)
-	}'
+	}' $@
 }
 #
 # Main subroutines
@@ -590,8 +599,8 @@ ReadConfig() { # File
 GetCollectionsList() {
 	local D N
 	UPD=
-	set -- $(/usr/bin/find $PORTS_DIR -maxdepth 3 -name Pkgfile |
-		/bin/sed "s|^$PORTS_DIR/||;s|/.*$||" | /usr/bin/sort -u)
+	set -- $(echo $PORTS_DIR/*/*/Pkgfile | /bin/sed "
+		s|$PORTS_DIR/\([^/]*\)[^ ]*|\1|g;s/ /\n/g" | /usr/bin/sort -u)
 	USE=$*
 	for D in /etc/ports/drivers/*; do
 		[ -x $D ] || continue
@@ -675,48 +684,22 @@ BuildPackages() {
 	LST=$(Lst ' ' \#)
 	. $TMP/PKG.new
 	case $CMD in *b*);; *) return;; esac
-	local PKG_DIR WHO
-	PKG_DIR=${PKGMK_PACKAGE_DIR:-$PORTS_DIR} WHO=
-	Pkg() {
-		local D N P U
-		D=${PKGMK_PACKAGE_DIR:-$PORTS_DIR/$1/$3} P=$3
-		[ $PKG_DIR/PKG.use -nt $D/$3#$2$EXT ] || {
-		shift 2
-		for N do
-			case $N in
-			*-dev)	U=$P;;
-			[a-z]*)	U=;;
-			+)	echo + $P; break;;
-			*)	break
-			esac
-			echo $N $U $(CheckPkgFiles $N)
-		done
-		[ -z "$WHO" ] || echo @ $WHO
-		}
-		WHO=
-	}
-	Who() { WHO=$*; }
-	. $TMP/PKG.new >$TMP/Pkg
-	[ ! $PKG_DIR/PKG.use -nt $PORTS_DIR/PKG.grp -o -s $TMP/Pkg ] || return 0
 	Msg Creating a list of dependencies for packages
+	local D
 	{
 	/bin/sed -n '/^$/d;/^lib64$/d;/\//{s%^%/%;/\.so\./p;/\.so$/p;d}
 		N;s%\n% %;s%^%= %p' /var/lib/pkg/db
-	for R in $USE; do
-		echo "- \c"
-		/usr/bin/find ${R##*/} -maxdepth 1 -type d -printf '%f '
-		echo
+	for D in $USE; do
+		echo $(/usr/bin/find $D -maxdepth 1 -type d -printf '%f ')
 	done
 	[ -s $PORTS_DIR/PKG.grp ] && /bin/sed '/^[ \t]*\(#.*\)*$/d
 		:L /[ \t][ \t]*\\$/{N;b L};s/[ \t][ \t]*\\\n/ /g
 		s/[ \t]*#.*//;s/[ \t][ \t]*/ /g' $PORTS_DIR/PKG.grp
-	[ -f $PKG_DIR/PKG.use ] && /bin/sed '1!G;h;$!d' $PKG_DIR/PKG.use
-	/bin/cat $TMP/Pkg
-	} | CreateUse >$TMP/PKG.use
+	} | CreateUse - $TMP/PKG.new >$TMP/PKG.use
 	/bin/sed -i "1!G;h;\$!d;s/\$/\n$EXT/" $TMP/PKG.use
-	/bin/cp $TMP/PKG.* $PKG_DIR
-	[ $PKG_DIR = $PORTS_DIR ] ||
-		/bin/rm -f $PORTS_DIR/PKG.new $PORTS_DIR/PKG.use
+	D=${PKGMK_PACKAGE_DIR:-$PORTS_DIR}
+	/bin/cp $TMP/PKG.* $D
+	[ $D = $PORTS_DIR ] || /bin/rm -f $PORTS_DIR/PKG.new $PORTS_DIR/PKG.use
 }
 RmCmd() { Msg rm $1; case $CMD in *b*) /bin/rm $1;; esac; }
 DeleteUnused() {
