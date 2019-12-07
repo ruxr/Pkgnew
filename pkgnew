@@ -406,9 +406,9 @@ Who() { # Pkg User Uid [Group Gid] [Home [Comment]]
 		/bin/sed "/^$U:[^:]*:$u:$g:/!d;s/.*/2/;q" /etc/passwd
 		/bin/sed "/^$U:/!d;s/.*/3/;q" /etc/shadow) in
 	1*2*3);;
-	'')	Msg @ $C
+	'')	Msg @ $C; C=$*
 		[ -z "$CMD" ] && return || /usr/sbin/groupadd -g $g $G
-		/usr/sbin/useradd -u $u -g $G -d $H -s '' -c "${*:-$U}" $U;;
+		/usr/sbin/useradd -u $u -g $G -d $H ${C:+-c "$C"} $U;;
 	*)	H="$U installed with errors"
 		[ -z "$CMD" ] && Msg ! user $H || End User $H!
 	esac

@@ -60,7 +60,7 @@ Who() {
 		if [ -x $DST/usr/sbin/useradd ]; then
 			/usr/sbin/groupadd ${DST:+-R $DST} -g $g $G
 			/usr/sbin/useradd ${DST:+-R $DST} -u $u -g $G -d $H \
-				-s '' -c "${1:-$U}" $U
+				${*:+-c "$*"} $U
 		else
 			echo "$G::$g:" >>$DST/etc/group
 			echo "$U:x:$u:$g:$*:$H:" >>$DST/etc/passwd
