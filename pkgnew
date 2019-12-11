@@ -704,36 +704,33 @@ BuildPackages() {
 RmCmd() { Msg rm $1; case $CMD in *b*) /bin/rm $1;; esac; }
 DeleteUnused() {
 	case $CMD in ''|*z*);; *) return 0;; esac
-	local PKG SRC F
-	PKG= SRC=
-	Pkg() {
-		local N P V
-		V=$2 P=$3; shift 2
-		for N do
-			case $N in
-			[a-z]*)	PKG=$PKG\ $N#$V$EXT;;
-			+)	PKG=$PKG\ $P#$V.post-install;;
-			=)	shift; break
-			esac
-		done
-		for N do case $N in */*) SRC=$SRC\ ${N##*/};; esac; done
-	}
-	Who() { :; }
-	. $TMP/PKG.new
-	[ -n "$PKG" ] || End Empty packages list!
-	[ -n "$SRC" ] || End Empty sources list!
-	if [ -n "$PKGMK_PACKAGE_DIR" ]; then
-		Msg Deleting unused packages
-		for F in $PKGMK_PACKAGE_DIR/*#*; do
-			case " $PKG " in *\ ${F##*/}\ *);; *) RmCmd $F;; esac
-		done
-	fi
-	if [ -n "$PKGMK_SOURCE_DIR" ]; then
-		Msg Deleting unused source files
-		for F in $PKGMK_SOURCE_DIR/*; do
-			case " $SRC " in *\ ${F##*/}\ *);; *) RmCmd $F;; esac
-		done
-	fi
+	echo ${PKGMK_SOURCE_DIR:+$PKGMK_SOURCE_DIR/*} \
+		${PKGMK_PACKAGE_DIR:+$PKGMK_PACKAGE_DIR/*#*} | /usr/bin/awk '
+	BEGIN	{
+		E = "'$EXT'"
+		P = "'$PKGMK_PACKAGE_DIR'"
+		S = "'$PKGMK_SOURCE_DIR'"
+		}
+	/^Pkg/  {
+		for(i = 3; i++ < NF;) {
+			if($i == "=") break
+			if($i != "+") p = $i "#" $3 E
+			else p = $4 "#" $3 ".post-install"
+			if(P) F[P "/" p] = 0
+		}
+		for(; i++ < NF;) {
+			if($i == "#") break
+			if(sub(/^.+\//, "", $i) && S) F[S "/" $i] = 0
+		}
+		next
+		}
+	/\//	{
+		for(i = 0; i++ < NF;)
+			if(!($i in F || $i ~ /*/)) print "RmCmd " $i
+	}' $TMP/PKG.new - >$TMP/Del
+	[ ! -s $TMP/Del ] && return ||
+	Msg Delete unused source files and packages
+	. $TMP/Del
 }
 CheckReject() {
 	[ -z "$(/usr/bin/find /var/lib/pkg/rejected -type f)" ] && return ||
