@@ -625,17 +625,15 @@ UpdateCollections() {
 	local C D
 	D=
 	for C in $NEW; do
-		C=${C%%.*}
 		case " $UPD " in *\ $C.*) continue;; esac
-		Msg Unknown collection $C
+		Msg Unknown update method for collection $C
 		D=E
 	done
 	[ -z "$D" ]
-	[ -n "$NEW" ] || NEW=$UPD
 	Msg Updating the port collections
 	for C in $UPD; do
 		D=${C#*.} C=${C%%.*}
-		case " $NEW " in *\ $C\ *|*\ $C.$D\ *);; *) continue;; esac
+		case " ${NEW:-$UPD} " in *\ $C[\ .]*);; *) continue;; esac
 		Inf updating collection $C
 		/etc/ports/drivers/$D /etc/ports/$C.$D >>$LOG 2>&1 || Log
 	done
