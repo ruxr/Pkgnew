@@ -8,10 +8,10 @@
 
 # Base packages
 BASE	bash bindutils ca-certificates core coreutils dash dcron diffutils \
-	exim file findutils gawk grep groff gzip iana-etc inetutils iproute2 \
-	iputils less lilo locale man-db man-pages openssh pciutils pkguse \
-	pkgutils procps psmisc rc rsync sed shadow start-stop-daemon sudo \
-	sysklogd sysvinit tar tzdata vim wget which
+	e2fsprogs exim file findutils gawk grep groff gzip iana-etc \
+	inetutils iproute2 iputils less locale man-db man-pages openssh \
+	pciutils pkguse pkgutils procps psmisc rc rsync sed shadow \
+	start-stop-daemon sudo sysklogd sysvinit tar tzdata vim wget which xz
 
 # Roles of my computers
-SERVER 	BASE apache bind dhcp squid tftp-hpa
+SERVER 	BASE apache bind dhcp samba squid tftp-hpa
