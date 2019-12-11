@@ -466,7 +466,7 @@ CreateUse() {
 		delete u[n]
 		for(i in u) { Dep[n] = Dep[n] " " i; Req[i]++ }
 	}
-	/^\// {	Lib[$1] = n; next }
+	/^\// { Lib[$1] = n; next }
 	/^=/ { Val[Ord[++c] = n = $2] = $3; All(n); next }
 	/^Pkg/ {
 		if(/ \+ /) Run[$4] = "+ " $4
@@ -603,20 +603,19 @@ ReadConfig() { # File
 }
 GetCollectionsList() {
 	local D N
-	UPD=
-	set -- $(echo $PORTS_DIR/*/*/Pkgfile | /bin/sed "
-		s|$PORTS_DIR/\([^/]*\)[^ ]*|\1|g;s/ /\n/g" | /usr/bin/sort -u)
-	USE=$*
+	UPD= USE=
+	for N in $PORTS_DIR/*/*/Pkgfile; do
+		N=${N#$PORTS_DIR/} N=${N%%/*}
+		case " $USE " in *\ $N\ *);; *) USE=$USE\ $N;; esac
+	done
 	for D in /etc/ports/drivers/*; do
-		[ -x $D ] || continue
+		[ ! -x $D ] ||
 		for N in /etc/ports/*.${D##*/}; do
-			case $N in
-			*\**);;
-			*)	N=${N##*/} UPD=$UPD\ $N
-				case " $USE " in *\ ${N%%.*}\ *) continue;; esac
-				case $CMD in *u*) continue;; esac
-				End Port collections must be updated!
-			esac
+			N=${N##*/}
+			[ "x${N%%.*}" = "x*" ] || UPD=$UPD\ $N
+			case " $USE " in *\ ${N%%.*}\ *) continue;; esac
+			case $CMD in *u*) continue;; esac
+			End Port collections must be updated!
 		done
 	done
 	[ -n "$USE$UPD" ] || End Empty list of port collections!
