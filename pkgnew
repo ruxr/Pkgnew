@@ -441,7 +441,16 @@ CheckPkgFiles() { # Pkg
 		END { asort(U); for(n in U) if(!(U[n] in L)) print U[n] }'
 }
 CreateUse() {
-	/usr/bin/awk '
+	{
+	/bin/sed -n '/^$/d;/^lib64$/d;/\//{s%^%/%;/\.so\./p;/\.so$/p;d}
+		N;s%\n% %;s%^%= %p' /var/lib/pkg/db
+	for D in $USE; do
+		echo $(/usr/bin/find $D -maxdepth 1 -type d -printf '%f ')
+	done
+	[ -s $PORTS_DIR/PKG.grp ] && /bin/sed '/^[ \t]*\(#.*\)*$/d
+		:L /[ \t][ \t]*\\$/{N;b L};s/[ \t][ \t]*\\\n/ /g
+		s/[ \t]*#.*//;s/[ \t][ \t]*/ /g' $PORTS_DIR/PKG.grp
+	} | /usr/bin/awk '
 	BEGIN {
 		Lib["/usr/bin/perl"] = "perl"
 		Lib["/usr/bin/python"] = "python"
@@ -491,9 +500,12 @@ CreateUse() {
 	}
 	END {
 		delete Lib
-		for(n in Pkg) Err("missing package " n " required by" Pkg[n])
-		for(n in Use) Err("missing library " n " required by" Use[n])
+		for(n in Use) {
+			Err("missing " n " required by" Use[n])
+			print Use[n]
+		}
 		if(E) exit 1
+		for(n in Pkg) Err("missing package " n " required by" Pkg[n])
 		for(n in Val) {
 			delete s
 			split(Dep[n], a)
@@ -534,7 +546,7 @@ CreateUse() {
 				if(j) Out(n)
 			}
 		} while(j)
-	}' $@
+	}' - $TMP/PKG.new
 }
 #
 # Main subroutines
@@ -666,7 +678,7 @@ EditPatch() {
 		fi
 	esac
 }
-CreateBuildList() {
+BuildPackages() {
 	local N
 	Msg Creating a list of required packages for building
 	N=$(Lst ' .*')
@@ -675,33 +687,25 @@ CreateBuildList() {
 	1) End Port collections need to be updated!;;
 	2) End Fail to create ports build list!
 	esac
-	for N in $NEW; do /bin/touch $TMP/$N; done
-}
-BuildPackages() {
 	case $CMD in
 	*b*)	Msg Build and install packages according to dependencies;;
 	*d*)	Msg Downloading the necessary sources for building packages;;
 	*)	Msg View the process of building and installing packages
 	esac
 	LST=$(Lst ' ' \#)
-	. $TMP/PKG.new
-	case $CMD in *b*);; *) return;; esac
-	Msg Creating a list of dependencies for packages
-	local D
-	{
-	/bin/sed -n '/^$/d;/^lib64$/d;/\//{s%^%/%;/\.so\./p;/\.so$/p;d}
-		N;s%\n% %;s%^%= %p' /var/lib/pkg/db
-	for D in $USE; do
-		echo $(/usr/bin/find $D -maxdepth 1 -type d -printf '%f ')
+	while :; do
+		for N in $NEW; do /bin/touch $TMP/$N; done
+		. $TMP/PKG.new
+		case $CMD in *b*);; *) return;; esac
+		Msg Creating a list of dependencies for packages
+		CreateUse >$TMP/PKG.use && break ||
+		NEW=$(/bin/sed '' $TMP/PKG.use)
+		Msg Rebuilding and upgrade problematic packages
 	done
-	[ -s $PORTS_DIR/PKG.grp ] && /bin/sed '/^[ \t]*\(#.*\)*$/d
-		:L /[ \t][ \t]*\\$/{N;b L};s/[ \t][ \t]*\\\n/ /g
-		s/[ \t]*#.*//;s/[ \t][ \t]*/ /g' $PORTS_DIR/PKG.grp
-	} | CreateUse - $TMP/PKG.new >$TMP/PKG.use
 	/bin/sed -i "1!G;h;\$!d;s/\$/\n$EXT/" $TMP/PKG.use
-	D=${PKGMK_PACKAGE_DIR:-$PORTS_DIR}
-	/bin/cp $TMP/PKG.* $D
-	[ $D = $PORTS_DIR ] || /bin/rm -f $PORTS_DIR/PKG.new $PORTS_DIR/PKG.use
+	N=${PKGMK_PACKAGE_DIR:-$PORTS_DIR}
+	/bin/cp $TMP/PKG.* $N
+	[ $N = $PORTS_DIR ] || /bin/rm -f $PORTS_DIR/PKG.new $PORTS_DIR/PKG.use
 }
 RmCmd() { Msg rm $1; case $CMD in *b*) /bin/rm $1;; esac; }
 DeleteUnused() {
@@ -788,7 +792,6 @@ case $CMD in
 *)	Clock start
 	cd $PORTS_DIR
 	UpdateCollections
-	CreateBuildList
 	BuildPackages
 	DeleteUnused
 	Clock Successful completion
