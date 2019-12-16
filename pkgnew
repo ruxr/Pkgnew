@@ -765,7 +765,7 @@ case $#$CMD in 1[ep]);; *[ep]) End Option -$CMD requires one argument!;; esac
 case $CMD in *u*) HLP=collection;; *) HLP=port;; esac
 for NEW do
 	case -$NEW- in
-	*--*|*[!a-z0-9_+-]*|-[0-9_+-]*) End "Invalid $HLP name '$NEW'!"
+	*--*|*[!a-z0-9_+-]*|-[0-9_+]*) End "Invalid $HLP name '$NEW'!"
 	esac
 done
 [ $(/usr/bin/id -u) = 0 ] || End It can only do root!
