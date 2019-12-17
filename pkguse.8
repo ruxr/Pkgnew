@@ -19,6 +19,9 @@ Force installation
 .I -h
 Display help
 .TP
+.I -i
+Ignore inverse dependencies
+.TP
 .I -r ROOT
 Specify alternative installation root
 .TP
@@ -56,7 +59,7 @@ Default URL for download required files.
 List of packages in order of dependencies for installation, created by
 .BR pkgnew .
 .TP
-.I wget
+.I /usr/bin/wget
 Used by
 .B pkguse
 to download required files.

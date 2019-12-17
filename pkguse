@@ -10,6 +10,7 @@ Options:
   -d      Remove specified packages
   -f      Force installation
   -h      Display this text
+  -i      Ignore inverse dependencies
   -r ROOT Specify alternative installation root
   -s      Synchronize packages, default: compare
   -u URL  MasterHost URL, default: $URL
@@ -19,6 +20,7 @@ Msg() { echo pkguse: $* >&2; }
 Err() { Msg $*; exit 1; }
 End() { trap 0; [ -n "$NET" -a -n "$WRK" ] && /bin/rm -r $WRK; Msg ${*:-Done}; }
 New() { local T; N=; for T do [ $T = $P ] && M=$M\ $T || N=$N\ $T; done; }
+Chk() { for T; do case " $C " in *\ $T\ *) return 1;; esac; done; }
 Lst() {
 	local T
 	D=
@@ -70,21 +72,23 @@ Who() {
 	esac
 }
 CHK=
-DBD=/var/lib/pkg
+DBD=/var/lib/pkg/db
 DST=
+IGN=
 NET=%23
 PWR=
 SRC=
 WRK=
-while getopts dfhr:su: V; do
+while getopts dfhir:su: V; do
 	case $V in
 	d)	SRC=-;;
 	f)	PWR=-f;;
 	h)	echo "$HLP"; exit 0;;
+	i)	IGN=y;;
 	r)	DST=$OPTARG;;
 	s)	CHK=synchronized\ with;;
 	u)	URL=$OPTARG;;
-	?)	Err '\rUsage: pkguse [-r root] [-u url] [-dfs] [pkg ...]'
+	?)	Err '\rUsage: pkguse [-r root] [-u url] [-dfis] [pkg ...]'
 	esac
 done
 shift $(($OPTIND - 1))
@@ -104,16 +108,16 @@ http://[a-z0-9]*|https://[a-z0-9]*|ftp://[a-z0-9]*);;
 esac
 D= L= M= N= U=
 [ -z "$SRC" ] && N=$* || D=$*
-[ ! -f $DBD/db ] || U=$(/bin/sed '${x;s/\n/ /g;q}
-	/\//d;/^$/d;/^lib64/d;N;s/\n/#/;H;d' $DBD/db)
+[ ! -f $DBD ] || U=$(/bin/sed '${x;s/\n/ /g;q}
+	/\//d;/^$/d;/^lib64/d;N;s/\n/#/;H;d' $DBD)
 [ -n "$U$N" ] || Err Empty package list!
 for P in $U; do P=${P%#*}; case " $D " in *\ $P\ *);; *) L=$L\ $P;; esac; done
 Msg Packages are ${CHK:-compared to} $URL${DST:+ for $DST}
 set -e
 trap "End Terminated due to error!" 0
 trap "End Interrapted by signal!" 1 2 3 13 15
-if [ -n "$CHK" -a ! -f $DBD/db ]; then
-	/bin/mkdir -p $DBD && echo >$DBD/db || Err Failed create $DBD/db
+if [ -n "$CHK" -a ! -f $DBD ]; then
+	/bin/mkdir -p ${DBD%/*} && echo >$DBD || Err Failed create $DBD
 fi
 if [ -n "$NET" ]; then WRK=/tmp/.pkguse$$; /bin/mkdir $WRK; fi
 SRC= V=$N
@@ -123,17 +127,31 @@ while [ "$V" != "$L" ]; do
 	A= E= J= V=$L W=:
 	while read P R; do
 		case $P in
-		[a-z]*)	A=$P\ $A;;
-		+)	J=$R\ $J; continue;;
-		@)	W=:$R\ $W; continue;;
-		.*)	E=$P; continue
+		+)	J=$R\ $J;;
+		@)	W=:$R\ $W;;
+		.*)	E=$P;;
+		*)	A=$P\ $A P=${P%#*} R=$R\ $P
+			case " $L " in *\ $P\ *) Lst $D;; esac
+			case " $N " in *\ $P\ *) Lst $D; New $N;; esac
 		esac
-		P=${P%#*} R=$R\ $P
-		case " $L " in *\ $P\ *) Lst $D;; esac
-		case " $N " in *\ $P\ *) Lst $D; New $N;; esac
 	done
 done
 for P in $U; do P=${P%#*}; case " $A " in *\ $P#*);; *) D=$D\ $P;; esac; done
+C=
+for P in $A; do
+	T=${P%#*}
+	case " $L " in *\ $T\ *);; *) continue;; esac
+	case " $U " in *\ $P\ *)
+		case " $M " in *\ $T\ *);; *) [ -n "$DST" ] || continue;; esac
+	esac
+	C=$C\ $T
+done
+if [ -z "$IGN" ]; then
+	exec <$SRC
+	while read P R; do
+		case " $U " in *\ ${P%#*}*) Chk $R || C=$C\ ${P%#*};; esac
+	done
+fi
 for P in $D; do
 	case " $U " in
 	*\ $P#*) echo Remove $P
@@ -143,13 +161,9 @@ for P in $D; do
 done
 for P in $N; do Msg Unable to install unknown package $P; done
 for P in $A; do
-	N=${P%#*} V=${P#*#} T=
-	case " $L " in *\ $N\ *);; *) continue;; esac
-	case " $U " in
-	*\ $P\ *) T=$V
-		case " $M " in *\ $N\ *);; *) [ -n "$DST" ] || continue;; esac;;
-	*\ $N#*) T=${U#*$N#} T=${T%% *}
-	esac
+	N=${P%#*} V=${P#*#}
+	case " $C " in *\ $N\ *);; *) continue;; esac
+	case " $U " in *\ $N#*) T=${U#*$N#} T=${T%% *};; *) T=;; esac
 	case " $W " in *\ :$N\ *) F=${W#*:$N } F=${F%%:*}; Who $F;; esac
 	[ -n "$T" ] && echo Upgrade $N $T to $V || echo Install $N $V
 	if [ -n "$CHK" ]; then
