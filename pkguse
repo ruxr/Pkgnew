@@ -18,22 +18,20 @@ Options:
 Report bugs to <r.oreshnikov@gmail.com>"
 Msg() { echo pkguse: $* >&2; }
 Err() { Msg $*; exit 1; }
-End() { trap 0; [ -z "$WRK" ] || /bin/rm -rf $WRK; Msg ${*:-Done}; }
+End() { trap 0; [ -z "$WRK" ] || /bin/rm -rf $WRK; [ $# = 0 ] || Err $*; }
+Add() { ADD=; for V do [ $V = $N ] && NEW=$NEW\ $V || ADD=$ADD\ $V; done; }
+Del() { DEL=; for V do [ $V = $R ] || DEL=$DEL\ $V; done; }
+Pkg() { PKG=; for V do V=${V%#*}; [ $V = $N ] || PKG=$PKG\ $V; done; }
 Chk() {
-	case " $* " in *\ $N\ *) return;; esac
-	case $P in [a-z]*) ALL=$P\ $ALL;; esac
-	DEL=
-	for P do
-		case " $R " in
-		*\ $P\ *) Msg Unable to remove $P, required for $N;;
-		*) DEL=$DEL\ $P
+	Pkg $PKG
+	case " $DEL " in *\ $N\ *) return;; esac
+	CHK=$CHK\ $N
+	Add $ADD
+	for R in $R; do
+		case " $CHK $PKG " in *\ $R\ *);; *) PKG=$PKG\ $R;; esac
+		case " $DEL " in
+		*\ $R\ *) Msg Unable to remove $R, required for $N; Del $DEL
 		esac
-	done
-	set -- $ADD
-	ADD=
-	for P do [ $P = $N ] && NEW=$NEW\ $N || ADD=$ADD\ $P; done
-	for P in $R $N; do
-		case " $PKG " in *\ $P\ *);; *) PKG=$PKG\ $P;; esac
 	done
 }
 Get() {
@@ -43,36 +41,37 @@ Get() {
 	[ -n "$SRC" -a -r "$SRC" ] || Err Failure to get $1${2:+#$2}
 }
 Who() {
-	local U u G g H C T
 	U=$1 u=$2; shift 2
 	case $1 in ''|/*) G=$U g=$u;; *) G=$1 g=$2; shift 2;; esac
 	[ $# != 0 ] && H=$1 && shift || H=/
 	[ -f "$DST/etc/passwd" ] &&
-		T=$(/bin/sed "/^$G:/!d;s/.*/1/;q" "$DST/etc/group"
-		/bin/sed "/^$U:[^:]*:$u:$g:/!d;s/.*/2/;q" "$DST/etc/passwd"
+		T=$(/bin/sed "/^$G:[^:]*:$g:/!d;s/.*/1/;q" "$DST/etc/group"
+		/bin/sed "/^$U:.:$u:$g:/!d;s/.*/2/;q" "$DST/etc/passwd"
 		/bin/sed "/^$U:/!d;s/.*/3/;q" "$DST/etc/shadow") || T=
 	case $T in
-	1*2*3);;
-	'')	echo Creating user $U; [ -z "$CHK" ] ||
-		if [ -x "$DST/usr/sbin/useradd" ]; then
-			/usr/sbin/groupadd ${DST:+-R "$DST"} -g $g $G
-			/usr/sbin/useradd ${DST:+-R "$DST"} -u $u -g $G -d $H \
-				${*:+-c "$*"} $U
-		else
-			echo "$G::$g:" >>"$DST/etc/group"
-			echo "$U:x:$u:$g:$*:$H:" >>"$DST/etc/passwd"
-			echo "$U:x:0::::::" >>"$DST/etc/shadow"
-		fi;;
-	*) T="User $U created with errors"; [ -z "$CHK" ] && Msg $T || Err $T
+	1*2*3)	return;;
+	'')	Msg Creating user $U;;
+	*)	Msg User $U created with errors
 	esac
+	[ -z "$MOD" ] && return || [ -z "$T" ]
+	if [ -x "$DST/usr/sbin/useradd" ]; then
+		/usr/sbin/groupadd ${DST:+-R "$DST"} -g $g $G
+		/usr/sbin/useradd ${DST:+-R "$DST"} -u $u -g $G -d $H \
+			${*:+-c "$*"} $U
+	else
+		echo "$G::$g:" >>"$DST/etc/group"
+		echo "$U:x:$u:$g:$*:$H:" >>"$DST/etc/passwd"
+		echo "$U:x:0::::::" >>"$DST/etc/shadow"
+	fi
 }
-ADD=
+ADD=y
 CHK=
 DBD=/var/lib/pkg/db
 DEL=
 DST=
 EXT=
 IGN=
+MOD=
 NEW=
 OPT=
 PKG=
@@ -81,80 +80,94 @@ USE=
 WRK=/tmp/.pkguse$$
 while getopts dfhir:su: V; do
 	case $V in
-	d)	DEL=y;;
+	d)	ADD=;;
 	f)	OPT=-f;;
 	h)	echo "$HLP"; exit 0;;
 	i)	IGN=y;;
 	r)	DST=$OPTARG;;
-	s)	CHK=synchronized\ with;;
+	s)	MOD=synchronized\ with;;
 	u)	URL=${OPTARG:-.};;
 	?)	Err '\rUsage: pkguse [-r root] [-u url] [-dfis] [pkg ...]'
 	esac
 done
 shift $(($OPTIND - 1))
-set -e
-trap "End Terminated due to error!" 0
-trap "End Interrupted by signal!" 1 2 3 13 15
-[ -z "$DEL" -o $# != 0 ] || Err Option -d requires a list of packages
+[ -z "$DEL" -o $# != 0 ] || Err Option -d requires a list of packages!
 if [ -n "$DST" ]; then
-	[ -d "$DST" ] || Err $DST - no such directory
+	[ -d "$DST" ] || Err $DST - no such directory!
 	case $DST in /*);; *) DST=$(pwd -P)/$DST;; esac
 	DBD=$DST$DBD
 fi
 case $URL in
 http://[a-z0-9]*|https://[a-z0-9]*|ftp://[a-z0-9]*);;
-*) [ -d "$URL" ] || Err $URL - no such directory; WRK=
+*) [ -d "$URL" ] || Err $URL - no such directory!; WRK=
 esac
 for V do
 	case -$V- in
-	*--*|*[!a-zA-Z0-9_+-]*|-[0-9_+]*) Err Invalid package name $V
+	*--*|*[!a-zA-Z0-9_+-]*|-[0-9_+]*) Err Invalid package name $V!
 	esac
+	case " $PKG " in *\ $V\ *);; *) PKG=$PKG\ $V;; esac
 done
-if [ -f "$DBD" ]; then
-	USE=$(/bin/sed '${x;s/\n/ /g;q}
-		/\//d;/^$/d;/^lib64/d;N;s/\n/#/;H;d' "$DBD")
-elif [ -n "$CHK" ]; then
-	/bin/mkdir -p "${DBD%/*}" && echo >$DBD
-fi
-[ -n "$DEL" ] && DEL=$* || ADD=$*
-[ -n "$USE$ADD" ] || Err Empty package list
+set -e
+trap "End Terminated due to error!" 0
+trap "End Interrupted by signal!" 1 2 3 13 15
+Msg Packages are ${MOD:-compared to} $URL${DST:+ for $DST}
+[ ! -f "$DBD" ] || USE=$(/bin/sed '${x;s/\n/ /g;q}
+	/\//d;/^$/d;/^lib64/d;N;s/\n/#/;H;d' "$DBD")
+[ -n "$ADD" ] && ADD=$PKG ||
+	for P in $PKG; do
+		case " $USE " in
+		\ \ );;
+		*\ $R#*) DEL=$DEL\ $R;;
+		*) Msg Unable to remove uninstalled package $R
+		esac
+	done
+[ -n "$USE$ADD" ] || End Empty list of packages to work!
 [ -z "$WRK" ] || /bin/mkdir $WRK
-Msg Packages are ${CHK:-compared to} $URL${DST:+ for $DST}
 Get PKG.use
-V=+
-while [ "$V" != "$PKG" ]; do
-	ALL= RUN= V=$PKG WHO=:
+PKG=$USE\ $ADD
+while :; do
+	ALL= RUN= WHO=:
 	exec <$SRC
 	while read P R; do
 		case $P in
 		+)	RUN=$R\ $RUN;;
 		@)	WHO=:$R\ $WHO;;
 		.*)	EXT=$P;;
-		*)	N=${P%#*}
-			case " $USE $ADD $PKG " in *\ $N[#\ ]*) Chk $DEL;; esac
+		*)	ALL=$P\ $ALL N=${P%#*}
+			case " $PKG " in *\ $N[#\ ]*) Chk;; esac
 		esac
 	done
+	[ -n "$PKG" ] || break
+	for N in $PKG; do
+		case " $ALL " in *\ $N#*) continue;; esac
+		case " $ADD " in
+		*\ $N\ *) Msg Unable to install unknown package $N
+		esac
+		Pkg $PKG
+	done
+	ADD=
 done
+[ -n "$CHK" ] || End Nothing to do!
+[ -z "$MOD" -o -n "$USE" ] || ! /bin/mkdir -p "${DBD%/*}" || echo >$DBD
 for P in $USE; do
 	P=${P%#*}
-	case " $ALL " in
-	*\ $P#*);;
-	*) echo Remove $P; [ -z "$CHK" ] || /usr/bin/pkgrm ${DST:+-r "$DST"} $P
+	case " $CHK " in
+	*\ $P\ *);;
+	*) echo Remove $P; [ -z "$MOD" ] || /usr/bin/pkgrm ${DST:+-r "$DST"} $P
 	esac
 done
-for P in $ADD; do Msg Unable to install unknown package $P; done
 for P in $ALL; do
 	N=${P%#*}
-	case " $NEW " in
-	*\ $N\ *);;
-	*)	case " $USE " in *\ $P\ *) [ -n "$DST" ] || continue;; esac
-		NEW=$NEW\ $N
-	esac
+	case " $CHK " in *\ $N\ *);; *) continue;; esac
+	case " $USE " in *\ $P\ *) [ -n "$DST" ] || continue;; esac
+	case " $NEW " in *\ $N\ *);; *) NEW=$NEW\ $N;; esac
 done
-if [ -z "$IGN" ]; then
+if [ -z "$IGN$DST" ]; then
 	exec <"$SRC"
 	while read P R; do
-		case " $ALL " in *\ $P\ *) N=${P%#*}
+		N=${P%#*}
+		case " $CHK " in
+		*\ $N\ *)
 			for P in $R; do
 				case " $NEW " in
 				*\ $N\ *) break;;
@@ -165,19 +178,20 @@ if [ -z "$IGN" ]; then
 	done
 fi
 for P in $ALL; do
-	N=${P%#*} V=${P#*#}
-	case " $NEW " in *\ $N\ *);; *) continue;; esac
+	case $P in [a-z]*) N=${P%#*};; *) continue;; esac
+	case " $NEW " in *\ $N\ *) V=${P#*#};; *) continue;; esac
 	case " $WHO " in *\ :$N\ *) T=${WHO#*:$N } T=${T%%:*}; Who $T;; esac
 	case " $USE " in
 	*\ $N#*) T=${USE#* $N#} T=${T%% *}; echo Upgrade $N $T to $V;;
 	*) T=; echo Install $N $V
 	esac
-	[ -z "$CHK" ] || ! Get $N $V$EXT ||
+	[ -z "$MOD" ] || ! Get $N $V$EXT ||
 		/usr/bin/pkgadd $OPT ${DST:+-r "$DST"} ${T:+-u} "$SRC"
-	case " $RUN " in *\ $N\ *)
-		echo Post-install $N $V
-		[ -z "$CHK" ] || ! Get $N $V.post-install ||
+	case " $RUN " in
+	*\ $N\ *) echo Post-install $N $V
+		[ -z "$MOD" ] || ! Get $N $V.post-install ||
 			/bin/sh "$SRC" ${DST:+"$DST"}
 	esac
 done
+Msg Done
 End
