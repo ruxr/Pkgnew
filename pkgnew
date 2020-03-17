@@ -442,7 +442,8 @@ CheckPkgFiles() { # Pkg
 }
 CreateUse() {
 	{
-	/bin/sed -n '/^$/d;/^lib64$/d;/\//{s%^%/%;/\.so\./p;/\.so$/p;d}
+	/bin/sed -n '/^$/d;/^lib64$/d;/\//{s%^%/%;/\.so\./p;/\.so$/p
+		/^\/usr\/bin\/perl$/p;/^\/usr\/bin\/python$/p;d}
 		N;s%\n% %;s%^%= %p' /var/lib/pkg/db
 	for D in $USE; do
 		echo $(/usr/bin/find $D -maxdepth 1 -type d -printf '%f ')
@@ -451,11 +452,7 @@ CreateUse() {
 		:L /[ \t][ \t]*\\$/{N;b L};s/[ \t][ \t]*\\\n/ /g
 		s/[ \t]*#.*//;s/[ \t][ \t]*/ /g' $PORTS_DIR/PKG.grp
 	} | /usr/bin/awk '
-	BEGIN {
-		Lib["/usr/bin/perl"] = "perl"
-		Lib["/usr/bin/python"] = "python"
-		Val[Ord[++c] = "ALL"] = "0"
-	}
+	BEGIN { Val[Ord[++c] = "ALL"] = "0" }
 	function All(n) { Dep["ALL"] = Dep["ALL"] " " n }
 	function Out(n) {
 		if(n in Who) print Who[n]
