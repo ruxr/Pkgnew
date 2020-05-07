@@ -139,6 +139,7 @@ PortsList() { # List Port ...
 PortsOrder() {
 	/usr/bin/awk '
 	function Err(s) { E = 1; print "\t " s >"/dev/stderr" }
+	function Reg(i) { if(!(i in u)) l = l Dep[u[i] = i] }
 	function Out(n, a, i) {
 		split(Dep[n], a)
 		for(i in a) if(a[i] in Val) return 0
@@ -172,14 +173,9 @@ PortsOrder() {
 					if(j in Bad) Bad[j] = Bad[j] " " n
 					delete u
 					u[n] = l = j
-					while(l) {
-						split(l, a)
+					while(split(l, a)) {
 						l = ""
-						for(i in a) {
-							i = a[i]
-							if(i in u) continue
-							l = l Dep[u[i] = i]
-						}
+						for(i in a) Reg(a[i])
 					}
 					delete u[j]
 					for(i in s) if(i in u) delete s[l = i]
@@ -454,6 +450,7 @@ CreateUse() {
 	} | /usr/bin/awk '
 	BEGIN { Val[Ord[++c] = "ALL"] = "0" }
 	function All(n) { Dep["ALL"] = Dep["ALL"] " " n }
+	function Reg(i) { if(!(i in u)) l = l Dep[u[i] = i] }
 	function Out(n) {
 		if(n in Who) print Who[n]
 		print n "#" Val[n] Dep[n]
@@ -512,14 +509,9 @@ CreateUse() {
 				for(j in s) {
 					delete u
 					u[n] = l = j
-					while(l) {
-						split(l, a)
+					while(split(l, a)) {
 						l = ""
-						for(i in a) {
-							i = a[i]
-							if(i in u) continue
-							l = l Dep[u[i] = i]
-						}
+						for(i in a) Reg(a[i])
 					}
 					delete u[j]
 					for(i in s) if(i in u) delete s[l = i]
