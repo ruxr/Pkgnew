@@ -117,8 +117,8 @@ Msg Packages are ${MOD:-compared to} $URL${DST:+ for $DST}
 	for P in $PKG; do
 		case " $USE " in
 		\ \ );;
-		*\ $R#*) DEL=$DEL\ $R;;
-		*) Msg Unable to remove uninstalled package $R
+		*\ $P#*) DEL=$DEL\ $P;;
+		*) Msg Unable to remove uninstalled package $P
 		esac
 	done
 [ -n "$USE$ADD" ] || End Empty list of packages to work!
