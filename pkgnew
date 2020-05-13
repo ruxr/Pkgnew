@@ -143,8 +143,10 @@ PortsOrder() {
 	function Out(n, a, i) {
 		split(Dep[n], a)
 		for(i in a) if(a[i] in Val) return 0
-		if(n in Who) print "Who", n Who[n]
-		print "Pkg", Val[n], n Pkg[n] " =" Src[n] " #" Dep[n]
+		if(n != "ALL") {
+			if(n in Who) print "Who", n Who[n]
+			print "Pkg", Val[n], n Pkg[n] " =" Src[n] " #" Dep[n]
+		}
 		delete Val[n]
 		return 1
 	}
@@ -162,10 +164,7 @@ PortsOrder() {
 			delete s
 			split(Dep[n], a)
 			for(i in a) s[a[i]] = a[i]
-			if("ALL" in s) {
-				delete s["ALL"]
-				for(i in Val) s[i] = i
-			}
+			if("ALL" in s) ALL[n] = 0
 			delete s[n]
 			do {
 				l = ""
@@ -191,6 +190,9 @@ PortsOrder() {
 			Err(" port " n " not found" Bad[n])
 		}
 		if(E) exit 1
+		l = ""
+		for(i in Val) if(!(i in ALL)) l = l " " i
+		Dep[Ord[n] = Val[n] = n = "ALL"] = l
 		asort(Ord)
 		do {
 			n = 0
