@@ -20,7 +20,7 @@ XZ	= /usr/bin/xz
 BIN	= pkgnew pkguse
 MAN	= pkgnew.8 pkguse.8
 
-SRC	= $(BIN) $(MAN) PKG.grp
+SRC	= $(BIN) $(MAN) PKG.chk PKG.grp
 
 .PHONY:	all dist install
 

@@ -40,6 +40,12 @@ Edit working Pkgfile
 .I -h
 Display help
 .TP
+.I -i
+Information about specified packages or a list of possible unused ports
+.TP
+.I -l
+List of files that do not belong to installed packages
+.TP
 .I -p
 Show differences between original and build Pkgfile
 .TP
@@ -194,6 +200,9 @@ Directory for driver scripts.
 .TP
 .I /usr/ports/
 Root of local ports collection.
+.TP
+.I /usr/ports/PKG.chk
+Ports and paths exception configuration file.
 .TP
 .I /usr/ports/PKG.grp
 Role and group configuration file.
