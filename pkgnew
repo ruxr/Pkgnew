@@ -616,10 +616,10 @@ ReadConfig() { # File
 }
 GetCollectionsList() {
 	local D N
-	UPD= USE=
+	UPD= USE= D=${PKGMK_WORK_DIR#$PORTS_DIR/}
 	for N in $PORTS_DIR/*/*/Pkgfile; do
 		N=${N#$PORTS_DIR/} N=${N%%/*}
-		case " $USE " in *\ $N\ *);; *) USE=$USE\ $N;; esac
+		case " $D$USE " in *\ $N\ *);; *) USE=$USE\ $N;; esac
 	done
 	for D in /etc/ports/drivers/*; do
 		[ ! -x $D ] ||
