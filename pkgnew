@@ -670,10 +670,12 @@ EditPatch() {
 	p)	if /usr/bin/diff -u $S $D; then
 			Wrn The files $S and $D are identical
 		elif Ask Remove patch for original Pkgfile; then
-			/bin/rm -f $P
+			/bin/rm -f $P 2>/dev/null || End Cannot remove $P
 		fi;;
 	e)	${EDITOR:-/bin/vi} $D
 		if Ask Create a patch for the original Pkgfile; then
+			[ -w "${P%/*}" ] && [ ! -f "$P" -o -w "$P" ] ||
+				End Cannot create $P
 			/usr/bin/diff $S $D >$P || return 0
 			/bin/rm -f $P
 		fi
@@ -867,7 +869,9 @@ for NEW do
 	*--*|*[!a-z0-9_+-]*|-[0-9_+]*) End "Invalid $HLP name '$NEW'!"
 	esac
 done
-[ $(/usr/bin/id -u) = 0 ] || End It can only do root!
+case $CMD in *[bl]*)
+[ $(/usr/bin/id -u) = 0 ] || Ask This should be done as root. Continue || End
+esac
 NEW=$*
 #
 # Run
