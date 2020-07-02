@@ -1,59 +1,63 @@
 #
-#	@(#) Makefile V1.20.2 (C) 2019-2020 by Roman Oreshnikov
+#	@(#) Makefile V1.20.3 (C) 2019-2020 by Roman Oreshnikov
 #
+CRUX	= 3.5
 BINDIR	= /usr/sbin
 MANDIR	= /usr/share/man/man8
+TAREXT	= .tar.gz
 
 #
 # DON'T EDIT BELOW!!!
 #
-NAME	= Shell scripts for CRUX-3.5 packages administration
+NAME	= Shell scripts for CRUX packages administration
 
 CP	= /bin/cp
-DATE	= /bin/date
 INSTALL	= /usr/bin/install
 MKDIR	= /bin/mkdir
+RM	= /bin/rm
 SED	= /bin/sed
 TAR	= /bin/tar
-XZ	= /usr/bin/xz
 
 BIN	= pkgnew pkguse
 MAN	= pkgnew.8 pkguse.8
+SRC	= Makefile README.md $(BIN) $(MAN) PKG.chk PKG.grp
 
-SRC	= $(BIN) $(MAN) PKG.chk PKG.grp
-
-.PHONY:	all dist install
+.PHONY:	all clean dist install
 
 all:
 	@D=$(DESTDIR); \
 	echo "$(NAME) make(1) scenario"; \
 	echo "Settings:"; \
+	echo "  Linux CRUX release:         CRUX   = $(CRUX)"; \
 	echo "  Directory for scripts:      BINDIR = $(BINDIR)"; \
 	echo "  Directory for manual docs:  MANDIR = $(MANDIR)"; \
 	echo "Make targets:"; \
 	echo "  install   - install software relative $${D:-/}"; \
-	echo "  dist      - create tarball for distribute"
+	echo "  clean     - delete temporary files"; \
+	echo "  dist      - create tarball for distribution"
 
 install: $(BIN) $(MAN)
 	@echo "Install software"; set -e; \
+	W=$$($(SED) '/@(#)/!d;s/^.*V\(.*\)/\1/;q' Makefile); \
+	C=$${W#*) } V=$${W%% *} Y=$${C%% *}; \
 	for F in $(BIN); do \
-		$(INSTALL) -Dm 555 $$F "$(DESTDIR)$(BINDIR)/$$F"; \
+		$(SED) "s/\(@(#)\).*/\1 $$F V$$W/; \
+			s/\(CRUX-\)[0-9.]*/\1$(CRUX)/" $$F >$$F.i; \
+		$(INSTALL) -D $$F.i "$(DESTDIR)$(BINDIR)/$$F"; \
 	done; \
 	for F in $(MAN); do \
-		$(INSTALL) -Dm 644 $$F "$(DESTDIR)$(MANDIR)/$$F"; \
+		$(SED) "1s/\(.TH [^ ]* 8\) .*/\1 $$Y $$V/; \
+			\$$s/.*/Copyright $$C/; \
+			s/\(CRUX-\)[0-9.]*/\1$(CRUX)/" $$F >$$F.i; \
+		$(INSTALL) -Dm644 $$F.i "$(DESTDIR)$(MANDIR)/$$F"; \
 	done
 
-dist: Makefile $(SRC)
+clean:
+	@echo "Remove temporary files"; $(RM) *.i
+
+dist: $(SRC)
 	@set -e; \
-	D=`$(SED) '/@(#)/!d;s/^.*V\([^ ]*\).*/Pkgnew-\1/;q' Makefile`; \
-	echo "Create $$D.tar.xz"; \
+	D=$$($(SED) '/@(#)/!d;s/^.*V\([^ ]*\).*/Pkgnew-\1/;q' Makefile); \
 	[ ! -d "$$D" ] || $(RM) -rf "$$D"; $(MKDIR) "$$D"; \
-	$(CP) Makefile "$$D"; \
-	V=`$(SED) '/@(#)/!d;s/^.*\(V.*\)$$/\1/;q' Makefile`; \
-	for F in $(SRC); do \
-		$(SED) "s/\(@(#)\).*/\1 $$F $$V/" $$F >"$$D/$$F"; \
-	done; \
-	C=$${V#* * } V=$${V#*V} V=$${V%% *}; Y=`$(DATE) +%Y`; \
-	$(SED) -i "1s/\(.TH [^ ]* 8\) .*/\1 $$Y $$V/;\$$s/.*/Copyright $$C/" \
-		$$D/*.8; \
-	$(TAR) cf - --remove-files "$$D" | $(XZ) -9c >"$$D.tar.xz"
+	$(CP) $(SRC) "$$D"; echo "Create $$D$(TAREXT)"; \
+	$(TAR) -caf "$$D$(TAREXT)" --remove-files "$$D"
