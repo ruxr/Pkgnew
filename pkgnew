@@ -15,7 +15,7 @@ Options:
   -h  Display this text
   -i  Information about specified packages or a list of possible unused ports
   -l  List of files that do not belong to installed packages
-  -p  Show differences between original and build Pkgfile
+  -p  Show differences between original and used Pkgfile
   -u  Update the port collections
   -z  Delete unused source files and packages after build
 
@@ -220,12 +220,9 @@ PortsOrder() {
 CheckSources() { # [Src ...]
 	local L S
 	Inf check sources
-	for S in Pkgfile .footprint; do
-		[ ! -f $S ] || /bin/ln -s $PRT_DIR/$S $WRK_DIR
-	done
-	for S do
+	for S in Pkgfile .footprint "$@"; do
 		case $S in */*) S=$SRC_DIR/${S##*/};; *) S=$PRT_DIR/$S;; esac
-		/bin/ln -s $S $WRK_DIR
+		[ ! -f $S ] || /bin/ln -s $S $WRK_DIR
 	done
 	[ -f .signature ] || return 0
 	S=/usr/bin/signify L=/etc/ports/$DIR.pub
@@ -540,7 +537,7 @@ CreateUse() {
 			for(n in Ord) if(Ord[n] in Val) {
 				split(Dep[n = Ord[n]], a)
 				for(i in a) if(a[i] in Val) { n = 0; break }
-				if(n) { Out(n); j = 1 }
+				if(n) Out(j = n)
 			}
 			if(!j) {
 				for(i in Val) if(Req[i] > j) j = Req[n = i]
@@ -564,10 +561,8 @@ Time() { # Time
 }
 Clock() {
 	case $1 in
-	start)	ClockStart=$(/bin/date +%s)
-		Time 0
-		local T
-		while :; do /bin/sleep 5; T=$(($T + 5)); Time $T; done &
+	Start)	ClockStart=$(/bin/date +%s) T=0
+		while :; do Time $T; /bin/sleep 5; T=$(($T + 5)); done &
 		PID=$!;;
 	*)	[ -n "$PID" ] || return
 		kill $PID
@@ -579,7 +574,7 @@ Clock() {
 ChkDir() { # Var Dir
 	case /$2/ in
 	//) return;;
-	/*//*/|/-*|*/./*|*/../*|*[*?\[\]\'\\\ \	]*|/[!/]*//)
+	/*//*/|/-*|*/./*|*/../*|*[*?\[\]\'\"\\\	\ ]*|/[!/]*//)
 		Wrn "Invalid directory name '$2' for $1";;
 	/[!/]*)	Wrn The directory for $1 must be specified as an absolute path;;
 	*)	[ -d $2 ] && return || Wrn Directory $2 does not exist
@@ -636,13 +631,12 @@ GetCollectionsList() {
 UpdateCollections() {
 	case $CMD in *u*);; *) return;; esac
 	local C D
-	D=
 	for C in $NEW; do
 		case " $UPD " in *\ $C.*) continue;; esac
 		Msg Unknown update method for collection $C
-		D=E
+		CMD=
 	done
-	[ -z "$D" ]
+	[ -n "$CMD" ]
 	Msg Updating the port collections
 	for C in $UPD; do
 		D=${C#*.} C=${C%%.*}
@@ -667,19 +661,16 @@ EditPatch() {
 		Ask || :
 	fi
 	case $CMD in
-	p)	if /usr/bin/diff -u $S $D; then
-			Wrn The files $S and $D are identical
-		elif Ask Remove patch for original Pkgfile; then
-			/bin/rm -f $P 2>/dev/null || End Cannot remove $P
-		fi;;
+	p)	! /usr/bin/diff -u $S $D || Wrn The file $S has not changed
+		[ ! -f $P ] || ! Ask Remove patch for $S || S=;;
 	e)	${EDITOR:-/bin/vi} $D
 		if Ask Create a patch for the original Pkgfile; then
-			[ -w "${P%/*}" ] && [ ! -f "$P" -o -w "$P" ] ||
-				End Cannot create $P
-			/usr/bin/diff $S $D >$P || return 0
-			/bin/rm -f $P
+			/usr/bin/diff $S $D >$D~ && S= ||
+				/usr/bin/install -Dm644 $D~ $P ||
+					End Unable to create $P
 		fi
 	esac
+	[ -n "$S" ] || /bin/rm -f $P 2>/dev/null || End Unable to delete $P
 }
 BuildPackages() {
 	local N
@@ -714,12 +705,8 @@ RmCmd() { Msg rm $1; case $CMD in *b*) /bin/rm $1;; esac; }
 DeleteUnused() {
 	case $CMD in ''|*z*);; *) return 0;; esac
 	echo ${PKGMK_SOURCE_DIR:+$PKGMK_SOURCE_DIR/*} \
-		${PKGMK_PACKAGE_DIR:+$PKGMK_PACKAGE_DIR/*#*} | /usr/bin/awk '
-	BEGIN {
-		E = "'$EXT'"
-		P = "'$PKGMK_PACKAGE_DIR'"
-		S = "'$PKGMK_SOURCE_DIR'"
-	}
+		${PKGMK_PACKAGE_DIR:+$PKGMK_PACKAGE_DIR/*#*} |
+	/usr/bin/awk -vE=$EXT -vP=$PKGMK_PACKAGE_DIR -vS=$PKGMK_SOURCE_DIR '
 	/^Pkg/ {
 		for(i = 3; i++ < NF;) {
 			if($i ~ /^-/) {
@@ -746,8 +733,7 @@ DeleteUnused() {
 CheckReject() {
 	[ -z "$(/usr/bin/find /var/lib/pkg/rejected -type f)" ] && return ||
 	Wrn Found files rejected during package upgrades
-	case $CMD in *b*);; *) return;; esac
-	! Ask Run rejmerge || /usr/bin/rejmerge
+	case $CMD in *b*) ! Ask Run rejmerge || /usr/bin/rejmerge;; esac
 }
 PortsInfo() {
 	local F L
@@ -894,7 +880,7 @@ LOG=$TMP/Log
 /bin/rm -f $TMP/*
 case $CMD in
 [ep])	EditPatch $1;;
-*)	Clock start
+*)	Clock Start
 	cd $PORTS_DIR
 	UpdateCollections
 	BuildPackages
