@@ -675,8 +675,7 @@ EditPatch() {
 BuildPackages() {
 	local N
 	Msg Creating a list of required packages for building
-	N=$(Lst ' .*')
-	PortsList ALL $N $NEW | PortsOrder >$TMP/PKG.new ||
+	PortsList ALL $(Lst ' .*') $NEW | PortsOrder >$TMP/PKG.new ||
 	case $? in
 	1) End Port collections need to be updated!;;
 	2) End Fail to create ports build list!
@@ -703,7 +702,7 @@ BuildPackages() {
 }
 RmCmd() { Msg rm $1; case $CMD in *b*) /bin/rm $1;; esac; }
 DeleteUnused() {
-	case $CMD in ''|*z*);; *) return 0;; esac
+	case $CMD in ''|*z*);; *) return;; esac
 	echo ${PKGMK_SOURCE_DIR:+$PKGMK_SOURCE_DIR/*} \
 		${PKGMK_PACKAGE_DIR:+$PKGMK_PACKAGE_DIR/*#*} |
 	/usr/bin/awk -vE=$EXT -vP=$PKGMK_PACKAGE_DIR -vS=$PKGMK_SOURCE_DIR '
