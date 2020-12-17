@@ -571,13 +571,19 @@ Clock() {
 		Msg $*
 	esac
 }
-ChkDir() { # Var Dir
-	case /$2/ in
-	//) return;;
+ChkDir() { # Dir Var
+	local N
+	N="Value for variable $2"
+	case /$1/ in
+	//) [ $2 != PORTS_DIR ] && return || End Variable $2 not set!;;
 	/*//*/|/-*|*/./*|*/../*|*[*?\[\]\'\"\\\	\ ]*|/[!/]*//)
-		Wrn "Invalid directory name '$2' for $1";;
-	/[!/]*)	Wrn The directory for $1 must be specified as an absolute path;;
-	*)	[ -d $2 ] && return || Wrn Directory $2 does not exist
+		Wrn $N has an invalid directory name \'$1\';;
+	/[!/]*)	Wrn $N must be specified as an absolute path;;
+	*)	if [ $2 != PORTS_DIR -a "$1" = "$PORTS_DIR" ]; then
+			Wrn $N cannot be $PORTS_DIR
+		else
+			[ -d $1 ] && return || Wrn Directory $1 does not exist
+		fi
 	esac
 	return 1
 }
@@ -599,10 +605,10 @@ ReadConfig() { # File
 		esac
 	done
 	V=y
-	ChkDir PORTS_DIR "$PORTS_DIR" || V=
-	ChkDir PKGMK_SOURCE_DIR "$PKGMK_SOURCE_DIR" || V=
-	ChkDir PKGMK_PACKAGE_DIR "$PKGMK_PACKAGE_DIR" || V=
-	ChkDir PKGMK_WORK_DIR "$PKGMK_WORK_DIR" || V=
+	ChkDir "$PORTS_DIR" PORTS_DIR || V=
+	ChkDir "$PKGMK_SOURCE_DIR" PKGMK_SOURCE_DIR || V=
+	ChkDir "$PKGMK_PACKAGE_DIR" PKGMK_PACKAGE_DIR || V=
+	ChkDir "$PKGMK_WORK_DIR" PKGMK_WORK_DIR || V=
 	case $PKGMK_COMPRESSION_MODE in
 	bz2|gz|lz|xz) EXT=.pkg.tar.$PKGMK_COMPRESSION_MODE;;
 	*) Wrn "Compression mode '$PKGMK_COMPRESSION_MODE' not supported"; V=
@@ -623,7 +629,7 @@ GetCollectionsList() {
 			[ "x${N%%.*}" = "x*" ] || UPD=$UPD\ $N
 			case " $USE " in *\ ${N%%.*}\ *) continue;; esac
 			case $CMD in *u*) continue;; esac
-			End Port collections must be updated!
+			End The ports collections need to be updated!
 		done
 	done
 	[ -n "$USE$UPD" ] || End Empty list of port collections!
