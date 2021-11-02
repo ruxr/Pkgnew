@@ -1,5 +1,5 @@
 #
-#	@(#) Makefile V2.0 (C) 2019-2021 by Roman Oreshnikov
+#	@(#) Makefile V2.1 (C) 2019-2021 by Roman Oreshnikov
 #
 CRUX	= 3.6
 BINDIR	= /usr/sbin
@@ -20,7 +20,7 @@ TAR	= /bin/tar
 
 BIN	= pkgnew pkguse
 MAN	= pkgnew.8 pkguse.8
-SRC	= Makefile README.md $(BIN) $(MAN) PKG.chk PKG.grp
+SRC	= Makefile README.md $(BIN) $(MAN) PKG.cfg
 
 .PHONY:	all clean dist install
 
