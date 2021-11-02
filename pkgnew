@@ -1,6 +1,8 @@
 #!/bin/sh
-export PORTS_DIR=/usr/ports
-HLP="Update and build CRUX packages in $PORTS_DIR
+DIR=/usr/ports
+WRK=$DIR/CRUX
+CFG=$WRK/PKG.cfg
+NEW="Update and build CRUX packages
 
 	@(#) pkgnew V1.19 (C) 2019 by Roman Oreshnikov
 
@@ -9,8 +11,7 @@ HLP="Update and build CRUX packages in $PORTS_DIR
 Usage: pkgnew [options] [port ...]
 
 Options:
-  -b  Build packages
-  -d  Download sources
+  -b  Build and install packages
   -e  Edit working Pkgfile
   -h  Display this text
   -i  Information about specified packages or a list of possible unused ports
@@ -24,18 +25,17 @@ Report bugs to <r.oreshnikov@gmail.com>"
 # Common subroutines
 #
 Wrn() { echo "\rpkgnew: $*" >&2; }
-End() { trap 0; [ $# = 0 ] && exit || Clock $* || Wrn $*; exit 1; }
-CEL="\r\t\033[K"
-Msg() { case $1 in [a-z]*) echo "$CEL  $*";; *) echo "$CEL$*"; esac >&2; }
-Inf() { echo "$CEL  $*\r\c" >&2; }
-Lst() { /usr/bin/pkginfo -i | /bin/sed "s/$1/$2/;H;\$!d;x;s/\n/ /g"; }
-Log() {
-	Clock Last 10 lines from the full log file $LOG
-	/usr/bin/tail $LOG >&2
+Msg() { case $1 in [A-Z]*) echo $*;; *) echo \	$*;; esac >&2; }
+Inf() { echo "======> $*"; }
+Lst() { pkginfo -i | sed "s/$1/$2/;H;\$!d;x;s/\n/ /g"; }
+End() {
+	trap 0
+	[ -s "$LOG" ] && Wrn Last 10 lines of hidden output && tail $LOG >&2
+	[ -z $TMP ] || rm -r $TMP
+	[ $# = 0 ] && exit || Wrn $*
 	exit 1
 }
 Ask() {
-	local A
 	[ $# = 0 ] && A="Press Enter for continue" || A="$*? [N/y]"
 	read -p "pkgnew: $A " A
 	case $A in ''|[!Yy]*) return 1;; esac
@@ -43,107 +43,79 @@ Ask() {
 #
 # CreateBuildList subrouitines
 #
-PortCmpVerRel() { # Ver ver Rel rel
-	if [ "x$1" = "x$2" ]; then [ "$3" -gt "$4" ]; return; fi
-	local A B a b
-	A=$1. B=$2.
-	while :; do
-		a=${A%%.*} A=${A#*.} b=${B%%.*} B=${B#*.}
-		while [ "x$a" != "x$b" ]; do
-			case $a in
-			[0-9]*) A=${a%%[!0-9]*} a=${a#[0-9]*}
-				B=${b%%[!0-9]*} b=${b#[0-9]*}
-				[ "x$A" != "x$B" ] || continue
-				[ -z "$B" -o "0$A" -gt "0$B" ];;
-			*)	A=${a%%[0-9]*} a=${a#[!0-9]*}
-				B=${b%%[0-9]*} b=${b#[!0-9]*}
-				[ "x$A" != "x$B" ] || continue
-				[ -z "$B" -o "$A" \> "$B" ]
-			esac
-			return
-		done
-		[ -n "$a" ] || return
-	done
-}
-PortAlso() { # Pkgfile
-	/bin/sed '/^# Build also:/!d;s/.*://;s/[ \t]#.*//;q' $1
-}
-PortDepends() { # Pkgfile
-	/bin/sed '/^# Depends on:/!d;s/.*://;s/,/ /g;s/[ \t]#.*//;q' $1
-}
-PortOptions() { # Pkgfile
-	/bin/sed -n 's/^# Post-install:/Run/p;s/^# Required user:/Who/p' $1
-}
 PortPkgfile() { # Repo Port Pkgfile [Flag]
-	local A N P S
 	N=./Pkgfile S=
-	if [ -z "$4" ]; then
-		A=$1/$2/add-ons N=$TMP/$2 P=$3.patch
-		if ! /bin/cp -p $3 $N; then
+	if [ -z $4 ]; then
+		N=$TMP/$2
+		if ! cp -p $3 $N; then
 			echo % copy error; exit
-		elif [ -f $P ]; then
-			if [ ! $P -nt $3 ]; then
+		elif [ -f $WRK/$2 ]; then
+			if [ ! $WRK/$2 -nt $3 ]; then
 				echo % old patch for; exit
-			elif ! /usr/bin/patch -fi $P $N >/dev/null; then
+			elif ! patch -fi $WRK/$2 $N >/dev/null; then
 				echo % failed to patch; exit
 			fi
-			/bin/touch -r $P $N
+			touch -r $WRK/$2 $N
 			S=p
 		fi
-		if [ -d $A ]; then
-			[ $N -nt $A ] || /bin/touch -r $A $N
-			S=a$S
-		fi
+		for F in $WRK/$2#*; do
+			[ -f $F -a $F -nt $N ] && touch -r $F $N
+		done
+		[ -f $F ] && S=a$S
 	fi
-	/bin/bash -c "cd $1/$2; . $N
+	bash -c "cd $DIR/$1/$2; . $N
 		if [ \$? != 0 ]; then	:
 		elif [ -z \"\$name\" ]; then	echo - name
 		elif [ -z \"\$version\" ]; then	echo - version
 		elif [ -z \"\$release\" ]; then	echo - release
 		elif [ \"x$2\" != \"x\$name\" ]; then echo = name \"\$name\"
 		elif [ X\$(type -t build) != Xfunction ]; then echo + build
-		else	echo \$version \$release -$S \${source[@]}
+		else	echo \$version-\$release -$S \${source[@]}
 		fi" 2>/dev/null
 }
-PortsList() { # List Port ...
-	local A D F N P R U V
-	A=$1 N=
-	shift
-	for P do
-		case " $A " in *\ $P\ *) continue;; esac
-		U=
-		for D in $USE; do
-			F=$D/$P/Pkgfile
-			[ -f $F ] || continue
-			set -- $(PortPkgfile $D $P $F $U)
-			case $1 in
-			'')	echo " runtime error $F";;
-			%)	shift; echo " $* $F";;
-			+)	echo " function '$2' not specified in $F";;
-			-)	echo " variable '$2' not specified in $F";;
-			=)	echo " variable '$2' has bad value '$3' in $F";;
-			*)	if [ -z "$U" ]; then
-					U=$D V=$1 R=$2
-					shift 2
-					echo $P $D $V-$R $*
-					set -- $(PortAlso $TMP/$P)
-					[ $# = 0 ] || { A=$A\ $*; echo Pkg $*; }
-					set -- $(PortDepends $TMP/$P)
-					[ $# = 0 ] || { N=$N\ $*; echo Dep $*; }
-					PortOptions $TMP/$P
-				elif ! PortCmpVerRel $V $1 $R $2; then
-					echo " $U/$P#$V-$R <?> $D/$P#$1-$2"
-				fi
-			esac
-		done
-		[ -n "$U" ] || echo Bad $P
-		A="$A $P"
+PortOptions() { # ...
+	echo $*
+	V=$D/$P#$1
+	L=$(sed '/^# Build also:/!d;s/.*://;s/[ \t]#.*//;q' $TMP/$P)
+	for S in $L; do
+		case " $A " in
+		*\ $S\ *) echo " port '$S' declared before definition in $F";;
+		*) A=$A\ $S; echo Pkg $S
+		esac
 	done
-	[ -z "$N" ] || PortsList "$A" $N
+	L=$(sed '/^# Depends on/!d;s/.*://;s/,/ /g;s/[ \t]#.*//;q' $TMP/$P)
+	[ -z "$L" ] || { N=$N\ $L; echo Dep $L; }
+	sed -n 's/^# Post-install:/Run/p;s/^# Required user:/Who/p' $TMP/$P
+}
+PortCheck() {
+	F=$DIR/$D/$P/Pkgfile
+	[ -f $F ] || return 0
+	set -- $(PortPkgfile $D $P $F $V)
+	case $1 in
+	'')	echo " runtime error $F";;
+	%)	shift; echo " $* $F";;
+	+)	echo " function '$2' not specified in $F";;
+	-)	echo " variable '$2' not specified in $F";;
+	=)	echo " variable '$2' has bad value '$3' in $F";;
+	*)	[ -n "$V" ] && echo " $V <?> $D/$P#$1" || PortOptions $P $D $*
+	esac
+}
+PortsList() { # Port ...
+	A=ALL
+	while [ $# != 0 ]; do
+		N=
+		for P do
+			case " $A " in *\ $P\ *) continue;; esac
+			V= A=$A\ $P
+			for D in $USE; do PortCheck; done
+			[ -n "$V" ] || echo Bad $P
+		done
+		set -- $N
+	done
 }
 PortsOrder() {
-	/usr/bin/awk '
-	function Err(s) { E = 1; print "\t " s >"/dev/stderr" }
+	awk '
+	function Err(s) { E = 1; print "\t" s >"/dev/stderr" }
 	function Reg(i) { if(!(i in u)) l = l Dep[u[i] = i] }
 	function Out(n, a, i) {
 		split(Dep[n], a)
@@ -193,9 +165,12 @@ PortsOrder() {
 			for(i in s) l = l " " s[i]
 			Dep[n] = l
 		}
-		for(n in Bad) {
+		for(n in Bad) b[n] = n
+		asort(b)
+		for(n in b) {
+			n = b[n]
 			if(Bad[n] != "") Bad[n] = ", required for" Bad[n]
-			Err(" port " n " not found" Bad[n])
+			Err("port " n " not found" Bad[n])
 		}
 		if(E) exit 1
 		l = ""
@@ -207,9 +182,9 @@ PortsOrder() {
 			for(i in Ord) if(Out(Ord[i])) delete Ord[n = i]
 		} while(n)
 		if(asort(Ord)) {
-			Err(" Errors in dependency order:")
+			Err("Errors in dependency order:")
 			for(i in Ord)
-				Err("   port " Ord[i] " require" Dep[Ord[i]])
+				Err("  port " Ord[i] " require" Dep[Ord[i]])
 			exit 1
 		}
 	}'
@@ -217,319 +192,245 @@ PortsOrder() {
 #
 # BuildPackages subroutines
 #
-CheckSources() { # [Src ...]
-	local L S
-	Inf check sources
-	for S in Pkgfile .footprint "$@"; do
-		case $S in */*) S=$SRC_DIR/${S##*/};; *) S=$PRT_DIR/$S;; esac
-		[ ! -f $S ] || /bin/ln -s $S $WRK_DIR
-	done
-	[ -f .signature ] || return 0
-	S=/usr/bin/signify L=/etc/ports/$DIR.pub
-	[ -x $S ] || End Failed check .signature. Missing $S!
-	[ -s $L ] && L=-p\ $L || L=
-	( cd $WRK_DIR; $S -qCx $PRT_DIR/.signature $L 2>&1 | /usr/bin/sort |
-		/bin/sed '1s/^/\n/;$q1'
-	) || End Verification .signature fail!
-}
-DownloadSources() { # [Src ...]
-	local N F
-	for F do
-		case $F in */*);; *) continue;; esac
-		N=$SRC_DIR/${F##*/}
-		[ -s $N ] && continue
-		Inf wget ${F##*/}
-		case $CMD in
-		*d*) /usr/bin/wget -cqO $N.partial $F &&
-			/bin/mv $N.partial $N || End Failed download $F!;;
-		*b*) End Download disabled!
+NewPackages() {
+	SRC=$PKGMK_WORK_DIR/$P/src PKG=${SRC%/*}/pkg
+	rm -rf ${SRC%/*}
+	mkdir -p $SRC $PKG
+	cd ${SRC%/*}
+	Inf Upload missing files
+	for S do
+		case $S in
+		*/*)	F=$PKGMK_SOURCE_DIR/${S##*/}
+			[ -f $F ] || { wget -cO $F.part $S && mv $F.part $F; }
 		esac
-		echo >&2
 	done
-}
-UnpackSources() { # [Src ...]
-	local F
-	Inf unpack sources
-	for F do
-		F=$WRK_DIR/${F##*/}
+	Inf Verify source files
+	for F in Pkgfile .footprint $*; do
 		case $F in
-		*.tar.[glx]z|*.tar.bz2|*.tar.Z|*.tar.lzma|*.tar|*.t[gx]z| \
-		*.tbz2|*.zip|*.rpm|*.7z)
-			/usr/bin/bsdtar -C $WRK_DIR/src -opxf $F ||
-				End Failed extract ${F##*/}!;;
-		*) /bin/cp $F $WRK_DIR/src
+		*/*)	F=$PKGMK_SOURCE_DIR/${F##*/};;
+		*)	F=$D/$F
 		esac
+		ln -s $F .
 	done
-}
-CopyAdditionalSources() { # [Src ...]
-	local F
-	for F do [ ! -f $F ] || /bin/cp $F $WRK_DIR/src; done
-}
-Build() {
-	Inf build
-	/bin/bash -c "
+	if [ -f $D/.signature ]; then
+		F=/etc/ports/$G.pub
+		[ -s $F ] && F=-p\ $F || F=
+		signify -qCx $D/.signature $F
+	fi
+	cd $D
+	Inf Build the main package
+	bash -c "
+	unpack_source() {
+		local F
+		for F in \${source[@]}; do
+			case \$F in */*) F=\$PKGMK_SOURCE_DIR/\${F##*/};; esac
+			case \$F in
+			*.tar.[glx]z|*.tar.bz2|*.tar.Z|*.tar.lzma|*.tar| \
+			*.t[gx]z|*.tbz2|*.zip|*.rpm|*.7z)
+				bsdtar -C \$SRC -opxf \$F || exit;;
+			*)	cp \$F \$SRC
+			esac
+		done
+	}
 	[ -f .32bit ] && PKGMK_ARCH=32 || PKGMK_ARCH=64
-	. $TMP/$PRT
+	. $TMP/$P
 	. /etc/pkgmk.conf
-	PKGMK_PACKAGE_DIR=$PKG_DIR PKGMK_SOURCE_DIR=$SRC_DIR
-	PKGMK_WORK_DIR=$WRK_DIR SRC=$WRK_DIR/src PKG=$WRK_DIR/pkg
-	cd \$SRC
+	SRC=$SRC PKG=$PKG
+	unpack_source
+	for F in $U $WRK/$P#*; do [ ! -f \$F ] || cp \$F $SRC/\${F#*#}; done
+	cd $SRC
 	set -ex
-	build" >$LOG 2>&1 || Log
-}
-BuildAlso() { # Pkg ...
-	[ $# = 1 ] && return || Inf buildalso
-	/bin/bash -c "
-	. $TMP/$PRT
-	set -ex
-	buildalso" >>$LOG 2>&1 || Log
-}
-StripFiles() { # FilterList
-	local F P K
-	Inf strip
-	[ -f $1 ] && P="/usr/bin/grep -vf $1" || P=/bin/cat
-	/usr/bin/find . -type f -printf "%P\n" | $P |
+	build"
+	cd $PKG
+	Inf Remove unnecessary information from strippable files
+	S=$D/.nostrip
+	[ -f $S ] && S="grep -vf $S" || S=cat
+	find . -type f -printf "%P\n" | $S |
 	while read F; do
-		case $(/usr/bin/file -b $F) in
-		*ELF*executable*not\ stripped*) K=--strip-all;;
-		*ELF*shared\ object*not\ stripped*) K=--strip-unneeded;;
-		current\ ar\ archive) K=--strip-debug;;
+		case $(file -b $F) in
+		*ELF*executable*not\ stripped*) S=--strip-all;;
+		*ELF*shared\ object*not\ stripped*) S=--strip-unneeded;;
+		current\ ar\ archive) S=--strip-debug;;
 		*) continue
 		esac
-		/usr/bin/strip $K $F
+		strip $S $F
 	done
-}
-GzipManFiles() {
-	local F
-	Inf gzip mans
-	/usr/bin/find . -type f -path "*/man/man*/*" ! -name "*.gz" \
-		-exec /bin/gzip -9 {} \;
-	/usr/bin/find . -type l -path "*/man/man*/*" ! -name "*.gz" |
-	while read F; do
-		/bin/ln -sf $(/bin/readlink -n $F).gz $F.gz && /bin/rm $F
+	Inf Compress man pages
+	find . -type f -path "*/man/man*/*" ! -name "*.gz" -exec gzip -9 {} \;
+	find . -type l -path "*/man/man*/*" ! -name "*.gz" |
+	while read F; do ln -sf $(readlink -n $F).gz $F.gz && rm $F; done
+	cd ..
+	mv -T --backup=t pkg $P
+	if [ "x$L" != "x $P" ]; then
+		Inf Create additional packages
+		bash -c ". $TMP/$P; set -ex; buildalso"
+	fi
+	Inf Create packages
+	[ -z $U ] || install -m644 $SRC/$U $PKGMK_PACKAGE_DIR/$P#$V.$U
+	for F in $L; do
+		echo $F >>$PKGMK_PACKAGE_DIR/PKG.ldd
+		cd $F; bsdtar -caf ../$F#$V$EXT *; cd ..
 	done
+	mv *#$V$EXT $PKGMK_PACKAGE_DIR
+	cd /
+	rm -rf ${SRC%/*}
 }
-CreatePackages() { # Pkg ...
-	Inf pack
-	local P
-	for P do
-		( cd $P && /usr/bin/bsdtar -caf ../$P#$VER$EXT *) ||
-			End Failed to create package $P#$VER$EXT!
-	done
-	/bin/mv *#$VER$EXT $PKG_DIR
-}
-CopyPostInstall() { # [File]
-	[ $# = 0 ] && return || Inf copy post-install
-	[ -f $WRK_DIR/src/${1##*.} ] || End Missing file $WRK_DIR/src/${1##*.}!
-	/usr/bin/install -m644 $WRK_DIR/src/${1##*.} $PKG_DIR/$1
-}
-InstallPackages() { # Pkg ...
-	local P F
-	for P do
-		case "${NEW:-n} $LST " in
-		n*\ $P#$VER\ *) continue;;
-		*\ $P#*) F=-u;;
-		*) F=
-		esac
-		[ "x$NEW" = xy ] || Msg - $INF
-		NEW=y
-		Msg pkgadd $F $P#$VER$EXT
-		[ -z "$CMD" ] || /usr/bin/pkgadd $F $PKG_DIR/$P#$VER$EXT
-	done
-}
-RunPostInstall() { # [File]
-	[ -z "$1" -o -z "$NEW" ] && return || Msg sh $1
-	[ -z "$CMD" ] || /bin/sh $PKG_DIR/$1
-}
-PkgDepends() { # Pkg
-	[ -z "$CMD" -o -z "$NEW" ] && return || Inf create $DEP
-	while [ $# != 0 ]; do
-		echo $1 ${1%-dev} $(CheckPkgFiles $1); shift
-	done >$DEP~
-	[ -s $DEP~ ] || End Failed to create $DEP!
-	/bin/mv $DEP~ $DEP
-}
-Pkg() { # Dir Ver-Rel Pkg ... -[apr] [Src ...]
-	local DEP DIR INF NEW PKG_DIR PRT PRT_DIR SRC_DIR VER WRK_DIR F L P
-	DIR=$1 VER=$2 PRT=$3 PRT_DIR=$PORTS_DIR/$1/$3 INF= NEW= L= P=
-	DEP=$PRT_DIR/.pkguse
-	PKG_DIR=${PKGMK_PACKAGE_DIR:-$PRT_DIR}
-	SRC_DIR=${PKGMK_SOURCE_DIR:-$PRT_DIR}
-	[ -z "$PKGMK_WORK_DIR" ] && WRK_DIR=$PRT_DIR/work ||
-		WRK_DIR=$PKGMK_WORK_DIR/$3
+Pkg() { # Repo Ver-Rel Pkg ... -[apr] [Src ...]
+	G=$1 V=$2 P=$3 D=$DIR/$1/$3 I= N= L= U=
 	shift 2
-	while [ -z "$INF" ]; do
+	while [ -z "$I" ]; do
 		case $1 in
-		-*)	INF=$DIR/$PRT\ $VER
-			case $1 in *a*) INF=$INF\ add-ons;; esac
-			case $1 in *p*) INF=$INF\ patch;; esac
+		-*)	I=$G/$P\ $V
+			case $1 in *a*) I=$I\ add-ons;; esac
+			case $1 in *p*) I=$I\ patch;; esac
 			case $1 in
-			*r)	P=$PRT#$VER.post-install; F=$P;;
-			*)	shift; break
+			*r) U=post-install I=$I\ $U F=$P#$V.$U;;
+			*) shift; break
 			esac;;
-		*)	L=$L\ $1; F=$1#$VER$EXT
+		*)	L=$L\ $1; F=$1#$V$EXT
 		esac
-		[ $PKG_DIR/$F -nt $TMP/$PRT ] || NEW=y
+		[ -n "$N" -o $PKGMK_PACKAGE_DIR/$F -nt $TMP/$P ] || N=y
 		shift
 	done
-	if [ -n "$NEW" ]; then
-		Msg + $INF
-		DownloadSources $*
-		case $CMD in *b*)
-			/bin/rm -rf $WRK_DIR $DEP
-			/bin/mkdir -p $WRK_DIR/src $WRK_DIR/pkg
-			cd $PRT_DIR
-			CheckSources $*
-			UnpackSources $*
-			CopyAdditionalSources ${P##*.} add-ons/*
-			Build
-			cd $WRK_DIR/pkg
-			StripFiles $PRT_DIR/.nostrip
-			GzipManFiles
-			cd $WRK_DIR
-			/bin/mv -T --backup=t pkg $PRT
-			BuildAlso $L
-			CreatePackages $L
-			CopyPostInstall $P
-			cd $PORTS_DIR
-			/bin/rm -r $WRK_DIR
-		esac
-	elif [ ! -s $DEP ]; then
-		NEW=r
+	if [ -n "$N" ]; then
+		Msg build $I
+		case $CMD in *b*) NewPackages $* >$LOG 2>&1; >$LOG; esac
 	fi
-	case $CMD in ''|*b*)
-		InstallPackages $L
-		RunPostInstall $P
-		PkgDepends $L
-	esac
+	for F in $L; do
+		case "${N:-n} $LST " in
+		n*\ $F#$V\ *) continue;;
+		*\ $F#*) S=-u;;
+		*) S=
+		esac
+		N=y F=$F#$V$EXT
+		Msg pkgadd $S $F
+		case $CMD in *b*) pkgadd $S $PKGMK_PACKAGE_DIR/$F; esac
+	done
+	[ -z "${N:+$U}" ] && return || F=$P#$V.$U
+	Msg sh $F
+	case $CMD in *b*) sh $PKGMK_PACKAGE_DIR/$F;; esac
 }
 Who() { # Pkg User Uid [Group Gid] [Home [Comment]]
 	case $CMD in ''|*b*) shift;; *) return;; esac
-	local C U u G g H
-	C=$* U=$1 u=$2
+	S=$* N=$1 U=$2
 	shift 2
-	case $1 in ''|/*) G=$U g=$u;; *) G=$1 g=$2; shift 2;; esac
-	[ $# != 0 ] && H=$1 && shift || H=/
-	case $(/bin/sed "/^$G:/!d;s/.*/1/;q" /etc/group
-		/bin/sed "/^$U:[^:]*:$u:$g:/!d;s/.*/2/;q" /etc/passwd
-		/bin/sed "/^$U:/!d;s/.*/3/;q" /etc/shadow) in
+	case $1 in ''|/*) G=$N I=$U;; *) G=$1 I=$2; shift 2;; esac
+	[ $# != 0 ] && D=$1 && shift || D=/
+	case $(sed "/^$G:/!d;s/.*/1/;q" /etc/group
+		sed "/^$N:[^:]*:$U:$I:/!d;s/.*/2/;q" /etc/passwd
+		sed "/^$N:/!d;s/.*/3/;q" /etc/shadow) in
 	1*2*3);;
-	'')	Msg @ $C; C=$*
-		[ -z "$CMD" ] && return || /usr/sbin/groupadd -g $g $G
-		/usr/sbin/useradd -u $u -g $G -d $H ${C:+-c "$C"} $U;;
-	*)	H="$U installed with errors"
-		[ -z "$CMD" ] && Msg ! user $H || End User $H!
+	'') Msg @ $S; S=$*; [ -z $CMD ] && return || groupadd -g $I $G
+		useradd -u $U -g $G -d $D ${S:+-c "$S"} $N;;
+	*) S="'$N' registered with errors"; [ -z $CMD ] && Msg ! $S || End $S!
 	esac
 }
-CleanList() {
-	/bin/sed '/\/$/d;/^$/d;/^etc/d;/^usr\/etc\//d
-		/^usr\/share/d;/^usr\/src/d;/^var/d;/\/include\//d
-		/\.[acho]$/d;/\.au$/d;/\.class$/d;/\.cmake$/d;/\.conf$/d
-		/\.css$/d;/\.def$/d;/\.gif$/d;/\.gz$/d;/\.html$/d;/\.jar$/d
-		/\.java$/d;/\.jpg$/d;/\.js$/d;/\.json$/d;/\.la$/d;/\.m4$/d
-		/\.pc$/d;/\.png$/d;/\.pod$/d;/\.properties$/d;/\.rst$/d
-		/\.svg$/d;/\.tmpl$/d;/\.ttf$/d;/\.txt$/d;/\.ui$/d;/\.wav$/d
-		/\.xml$/d;/\.xsl$/d;/\.zip$/d;s%^\(.*/.*\)$%/\1%'
-}
-CheckPkgFiles() { # Pkg
-	/usr/bin/pkginfo -l $1 | CleanList |
-	while read F; do
-		echo \ $F
-		case $(/usr/bin/file -b $F) in
-		*ELF*) /usr/bin/ldd $F 2>/dev/null | /bin/sed '
-			/\//!d;s%^[^/]*/%/%;s/ .*//;s%/\./%/%g;s%[^/]*/\.\./%%g
-			s%^/lib64/%/lib/%;s%^\(/usr/lib\)64/%\1/%';;
-		*[Pp]erl*) echo /usr/bin/perl;;
-		*[Pp]ython*) echo /usr/bin/python
-		esac
-	done | /usr/bin/awk '{ if($0 ~ /^\//) U[$1] = $1; else L[$1] = $1 }
-		END { asort(U); for(n in U) if(!(U[n] in L)) print U[n] }'
+CheckPackages() {
+	LST=$(Lst ' .*')
+	for P in $(awk -vL="$LST" '{ N[$1] = NF }
+		END { split(L, P); for(n in P) if(N[P[n]] < 2) print P[n] }' $1)
+	do
+		export LD_LIBRARY_PATH=$(sed "/^$P\s/!d;s/.*\s//" $CFG)
+		pkginfo -l $P |
+		while read F; do
+			case $F in
+			*/|*.[acho]|*.svg|*.gz|*.png|*.hpp|*.pfb|*.xml|*.enc| \
+			*.txt|*.cmake|*.p[mcso]|*.[at]fm|*.dtx|*.ui|*.js| \
+			*.def|*.ot[ft]|*.dat|*.la|*.conf|*.pod|*.m4|*.html| \
+			*.ttf|*.gif|*.mod|*.json|*.jar|*.xsl) continue
+			esac
+			echo "# /$F"
+			case $(file -b /$F) in
+			*ELF*) ldd /$F; objdump -p /$F | sed '/NEEDED/!d';;
+			*[Pp]erl*) echo "/usr/bin/perl =>";;
+			*[Pp]ython*) echo "/usr/bin/python =>"
+			esac
+		done 2>/dev/null | awk -vP="$P ${P%-dev}" '
+		/NEEDED/ { N[$2] = 0; next }
+		{
+			if($1 == "#") L[$2] = 0
+			else if($3 ~ /\//) U[$3] = $3
+			else if($2 == "=>") U[$1] = $1
+		}
+		END {
+			asort(U)
+			for(n in U) {
+				l = n = U[n]
+				sub(/.*\//, "", n)
+				if(n in N) if(!(l in L)) P = P " " l
+			}
+			print P
+		}'
+	done >>$1
+	awk -vL="$LST" '{
+		while(gsub(" /lib64/", " /lib/")+gsub(/\/[^/]+\/\.\.\//, "/"));
+		S[$1] = $0
+		} END { split(L, P); for(n in P) print S[P[n]] }' $1
 }
 CreateUse() {
 	{
-	/bin/sed -n '/^$/d;/^lib64$/d;/\//{s%^%/%;/\.so\./p;/\.so$/p
+	sed -n '/^$/d;/^lib64$/d;/\//{s%^%/%;/\.so\./p;/\.so$/p
 		/^\/usr\/bin\/perl$/p;/^\/usr\/bin\/python$/p;d}
 		N;s%\n% %;s%^%= %p' /var/lib/pkg/db
-	for D in $USE; do
-		echo $(/usr/bin/find $D -maxdepth 1 -type d -printf '%f ')
-	done
-	[ -s $PORTS_DIR/PKG.grp ] && /bin/sed '/^[ \t]*\(#.*\)*$/d
+	sed '/^[ \t]*\(#.*\)*$/d
 		:L /[ \t][ \t]*\\$/{N;b L};s/[ \t][ \t]*\\\n/ /g
-		s/[ \t]*#.*//;s/[ \t][ \t]*/ /g' $PORTS_DIR/PKG.grp
-	} | /usr/bin/awk '
-	BEGIN { Val[Ord[++c] = "ALL"] = "0" }
+		s/[ \t]*#.*//;s/[ \t][ \t]*/ /g;/^[A-Z]/!d' $CFG
+	} | awk 'BEGIN { Val[Ord[++c] = "ALL"] = "0" }
 	function All(n) { Dep["ALL"] = Dep["ALL"] " " n }
 	function Reg(i) { if(!(i in u)) l = l Dep[u[i] = i] }
+	function Err(s) { E++; print "\t" s >"/dev/stderr" }
 	function Out(n) {
 		if(n in Who) print Who[n]
 		print n "#" Val[n] Dep[n]
 		if(n in Run) print Run[n]
 		delete Val[n]
 	}
-	function Err(s) { E++; print "\t  " s >"/dev/stderr" }
-	function Str(u) {
-		n = $1; u["filesystem"] = 0
-		for(i = 1; i++ < NF;) {
-			if($i in Val) u[$i] = 0
-			else if(Lib[$i]) u[Lib[$i]] = 0
-			else if($i ~ /\//) Use[$i] = Use[$i] " " n
-			else Pkg[$i] = Pkg[$i] " " n
-		}
-		delete u[n]
-		for(i in u) { Dep[n] = Dep[n] " " i; Req[i]++ }
-	}
 	/^\// { Lib[$1] = n; next }
 	/^=/ { Val[Ord[++c] = n = $2] = $3; All(n); next }
-	/^Pkg/ {
-		if(/ -[^ ]*r /) Run[$4] = "+ " $4
-		f = $2 "/" $4 "/.pkguse"
-		while(g = getline < f) {
-			if(g == -1) { Err("Missing file " f); break }
-			Str()
-		}
+	/^Pkg/ { G[$2] = G[$2] " " $4; if(/ -[^ ]*r /) Run[$4] = "+ " $4; next }
+	/^Who/ { $1 = "@"; Who[$2] = $0; next }
+	/^[A-Z]/ {
+		n = $1; delete u; Val[Ord[++c] = n] = "0"
+		for(i = 1; i++ < NF;)
+			if($i in Val) u[$i] = 0; else P[$i] = P[$i] " " n
+		delete u[n]; for(i in u) { Dep[n] = Dep[n] " " i; Req[i]++ }
 		next
 	}
-	/^Who/ { $1 = "@"; Who[$2] = $0; next }
-	/^[A-Z]/ { Val[Ord[++c] = $1] = "0"; Str(); next }
 	{
-		delete u
-		for(n = 1; n++ < NF;) if($n in Val) u[$n] = $n
-		asort(u)
-		l = ""
-		for(n in u) l = l " " u[n]
-		Val[Ord[++c] = n = toupper($1)] = "0"
-		Grp[n] = Dep[n] = l
-		All(n)
+		n = $1; delete u; u["filesystem"] = 0
+		if($2 in Val) u[$2] = 0; else P[$2] = P[$2] " " n
+		for(i = 2; i++ < NF;)
+			if(Lib[$i]) u[Lib[$i]] = 0; else U[$i] = U[$i] " " n
+		delete u[n]; for(i in u) { Dep[n] = Dep[n] " " i; Req[i]++ }
 	}
 	END {
 		delete Lib
-		for(n in Use) {
-			Err("missing " n " required by" Use[n])
-			print Use[n]
-		}
+		for(n in U) { Err("missing " n " required by" U[n]); print U[n] }
 		if(E) exit 1
-		for(n in Pkg) Err("missing package " n " required by" Pkg[n])
+		for(n in P) Err("missing package " n " required by" P[n])
+		for(n in G) {
+			split(G[n], a); delete u; for(i in a) u[a[i]] = a[i]
+			l = ""; asort(u); for(i in u) l = l " " u[i]
+			Val[Ord[++c] = n = toupper(n)] = "0"
+			Grp[n] = Dep[n] = l; All(n)
+		}
+		delete G
 		for(n in Val) {
-			delete s
-			split(Dep[n], a)
+			split(Dep[n], a); delete s
 			for(i in a) s[a[i]] = a[i]
 			do {
 				l = ""
 				for(j in s) {
-					delete u
-					u[n] = l = j
+					delete u; u[n] = l = j
 					while(split(l, a)) {
-						l = ""
-						for(i in a) Reg(a[i])
+						l = ""; for(i in a) Reg(a[i])
 					}
 					delete u[j]
 					for(i in s) if(i in u) delete s[l = i]
 					if(l) break
 				}
 			} while(l)
-			asort(s)
-			for(i in s) l = l " " s[i]
-			Dep[n] = l
+			asort(s); for(i in s) l = l " " s[i]; Dep[n] = l
 		}
 		for(n in Grp) Dep[n] = Grp[n]
 		do {
@@ -544,212 +445,185 @@ CreateUse() {
 				if(j) Out(n)
 			}
 		} while(j)
-	}' - $TMP/PKG.new
+	}' - $TMP/PKG.new $TMP/PKG.ldd
 }
 #
 # Main subroutines
 #
-Time() { # Time
-	local H M S
-	S=$(($1 % 60)) M=$(($1 / 60)) H=$(($M / 60)) M=$(($M % 60))
-	case $H:$M:$S in
-	*:?:?) M=0$M S=0$S;;
-	*:?:??) M=0$M;;
-	*:??:?) S=0$S
-	esac
-	echo "\r$H:$M:$S\r\c" >&2
-}
-Clock() {
-	case $1 in
-	Start)	ClockStart=$(/bin/date +%s) T=0
-		while :; do Time $T; /bin/sleep 5; T=$(($T + 5)); done &
-		PID=$!;;
-	*)	[ -n "$PID" ] || return
-		kill $PID
-		PID=
-		Time $(($(/bin/date +%s) - $ClockStart))
-		Msg $*
-	esac
-}
 ChkDir() { # Dir Var
-	local N
-	N="Value for variable $2"
+	S="Value for $2"
 	case /$1/ in
-	//) [ $2 != PORTS_DIR ] && return || End Variable $2 not set!;;
-	/*//*/|/-*|*/./*|*/../*|*[*?\[\]\'\"\\\	\ ]*|/[!/]*//)
-		Wrn $N has an invalid directory name \'$1\';;
-	/[!/]*)	Wrn $N must be specified as an absolute path;;
-	*)	if [ $2 != PORTS_DIR -a "$1" = "$PORTS_DIR" ]; then
-			Wrn $N cannot be $PORTS_DIR
-		else
-			[ -d $1 ] && return || Wrn Directory $1 does not exist
+	//) Wrn $S must be specified in config;;
+	/*//*/|*//|/-*|*/./*|*/../*|*[*?\[\]\'\"\\\	\ ]*)
+		Wrn $S has an invalid directory name \'$1\';;
+	/[!/]*) Wrn $S must be specified as an absolute path;;
+	*)	if [ $1 = $DIR -a -n "$2" ]; then Wrn $S cannot be $1
+		else [ -d $1 ] && return || Wrn Directory $1 does not exist
 		fi
 	esac
 	return 1
 }
 ReadConfig() { # File
-	local P V
-	[ -r $1 ] || End Could not read configuration file $1!
-	set -- $(/bin/bash -c ". $1; echo - \$? -0 \
+	[ -r $1 ] || End Could not read config file $1!
+	F=$1
+	set -- $(bash -c "name=/./; . $1; echo - \$? -0 \
 		- \$PKGMK_SOURCE_DIR -1 - \$PKGMK_PACKAGE_DIR -2 \
 		- \$PKGMK_WORK_DIR -3 - \$PKGMK_COMPRESSION_MODE -4")
-	for P do
-		case $P in
+	for N do
+		case $N in
 		-1) PKGMK_SOURCE_DIR=$V;;
 		-2) PKGMK_PACKAGE_DIR=$V;;
-		-3) PKGMK_WORK_DIR=$V;;
+		-3) PKGMK_WORK_DIR=${V%//./};;
 		-4) PKGMK_COMPRESSION_MODE=${V:-gz};;
-		-0) [ "x$V" = x0 ] || End Runtime error $1!;;
+		-0) [ "x$V" = x0 ] || End Runtime error $F!;;
 		-) V=;;
-		*) V=${V:+$V }$P
+		*) V=${V:+$V }$N
 		esac
 	done
-	V=y
-	ChkDir "$PORTS_DIR" PORTS_DIR || V=
-	ChkDir "$PKGMK_SOURCE_DIR" PKGMK_SOURCE_DIR || V=
-	ChkDir "$PKGMK_PACKAGE_DIR" PKGMK_PACKAGE_DIR || V=
-	ChkDir "$PKGMK_WORK_DIR" PKGMK_WORK_DIR || V=
+	ChkDir "$PKGMK_SOURCE_DIR" PKGMK_SOURCE_DIR || N=
+	ChkDir "$PKGMK_PACKAGE_DIR" PKGMK_PACKAGE_DIR || N=
+	ChkDir "$PKGMK_WORK_DIR" PKGMK_WORK_DIR || N=
 	case $PKGMK_COMPRESSION_MODE in
 	bz2|gz|lz|xz) EXT=.pkg.tar.$PKGMK_COMPRESSION_MODE;;
-	*) Wrn "Compression mode '$PKGMK_COMPRESSION_MODE' not supported"; V=
+	*) Wrn "Compression mode '$PKGMK_COMPRESSION_MODE' not supported"; N=
 	esac
-	[ -n "$V" ]
+	[ -n "$N" ] || End Config file $F needs to be changed!
 }
 GetCollectionsList() {
-	local D N
-	UPD= USE= D=${PKGMK_WORK_DIR#$PORTS_DIR/}
-	for N in $PORTS_DIR/*/*/Pkgfile; do
-		N=${N#$PORTS_DIR/} N=${N%%/*}
-		case " $D$USE " in *\ $N\ *);; *) USE=$USE\ $N;; esac
+	UPD= USE= D=${PKGMK_WORK_DIR#$DIR/}
+	for F in $DIR/*/*/Pkgfile; do
+		F=${F#$DIR/} F=${F%%/*}
+		case " $D$USE " in *\ $F\ *);; *) USE=$USE\ $F;; esac
 	done
 	for D in /etc/ports/drivers/*; do
 		[ ! -x $D ] ||
-		for N in /etc/ports/*.${D##*/}; do
-			N=${N##*/}
-			[ "x${N%%.*}" = "x*" ] || UPD=$UPD\ $N
-			case " $USE " in *\ ${N%%.*}\ *) continue;; esac
+		for F in /etc/ports/*.${D##*/}; do
+			F=${F##*/}
+			[ "x${F%%.*}" = "x*" ] || UPD=$UPD\ $F
+			case " $USE " in *\ ${F%%.*}\ *) continue;; esac
 			case $CMD in *u*) continue;; esac
-			End The ports collections need to be updated!
+			End Port collections must be updated!
 		done
 	done
 	[ -n "$USE$UPD" ] || End Empty list of port collections!
-}
-UpdateCollections() {
 	case $CMD in *u*);; *) return;; esac
-	local C D
-	for C in $NEW; do
-		case " $UPD " in *\ $C.*) continue;; esac
-		Msg Unknown update method for collection $C
+	for F in $NEW; do
+		case " $UPD " in *\ $F.*) continue;; esac
+		Wrn Unknown update method for collection $F
 		CMD=
 	done
-	[ -n "$CMD" ]
+	[ -n $CMD ]
 	Msg Updating the port collections
-	for C in $UPD; do
-		D=${C#*.} C=${C%%.*}
-		case " ${NEW:-$UPD} " in *\ $C[\ .]*);; *) continue;; esac
-		Inf updating collection $C
-		/etc/ports/drivers/$D /etc/ports/$C.$D >>$LOG 2>&1 || Log
+	for F in $UPD; do
+		D=${F#*.} F=${F%%.*}
+		case " ${NEW:-$UPD} " in *\ $F[\ .]*)
+			Msg collection $F
+			/etc/ports/drivers/$D /etc/ports/$F.$D >$LOG 2>&1; >$LOG
+		esac
 	done
-	C=${CMD%u*} CMD=$C${CMD#*u} NEW=
+	F=${CMD%u*} CMD=$F${CMD#*u} NEW=
 }
 EditPatch() {
-	local D P R S
-	D=$TMP/$1 S=
-	for R in $USE; do
-		R=$PORTS_DIR/$R
-		if [ -f $R/$1/Pkgfile ]; then S=$R/$1/Pkgfile; break; fi
+	for S in $DIR/*/$1/Pkgfile; do
+		case $S in $PKGMK_WORK_DIR/*);; *) break;; esac
 	done
-	[ -n "$S" ] && P=$S.patch || End Port $1 not found!
-	/bin/cp $S $D
-	if [ -f $P ] && ! /usr/bin/patch -fi $P $D >/dev/null; then
+	[ -f $S ] || End Port $1 not found!
+	D=$TMP/$1
+	cp $S $D
+	if [ -f $WRK/$1 ] && ! patch -fi $WRK/$1 $D >/dev/null; then
 		Wrn The rejects detected when applying the patch
-		/bin/sed '1,2d' $D.rej
+		sed '1,2d' $D.rej
 		Ask || :
 	fi
 	case $CMD in
-	p)	! /usr/bin/diff -u $S $D || Wrn The file $S has not changed
-		[ ! -f $P ] || ! Ask Remove patch for $S || S=;;
-	e)	${EDITOR:-/bin/vi} $D
-		if Ask Create a patch for the original Pkgfile; then
-			/usr/bin/diff $S $D >$D~ && S= ||
-				/usr/bin/install -Dm644 $D~ $P ||
-					End Unable to create $P
-		fi
+	p) diff -u $S $D && Wrn There is no patch for $S || D=;;
+	e) ${EDITOR:-vi} $D; ! diff $S $D >$D~ &&
+		Ask Create a patch for $S && S= || D=
 	esac
-	[ -n "$S" ] || /bin/rm -f $P 2>/dev/null || End Unable to delete $P
+	if [ -z $D ]; then [ -f $WRK/$1 ] && Ask Remove patch for $S || D=y; fi
+	if [ -z "$D" -o -z "$S" ]; then
+		if [ ! -w $WRK ]; then End Directory $WRK is not writable!
+		elif [ -z $S ]; then cp $D~ $WRK/$1
+		elif [ -z $D ]; then rm $WRK/$1
+		fi
+	fi
 }
 BuildPackages() {
-	local N
 	Msg Creating a list of required packages for building
-	PortsList ALL $(Lst ' .*') $NEW | PortsOrder >$TMP/PKG.new ||
+	PortsList $(Lst ' .*') $NEW | PortsOrder >$TMP/PKG.new ||
 	case $? in
 	1) End Port collections need to be updated!;;
 	2) End Fail to create ports build list!
 	esac
 	case $CMD in
 	*b*)	Msg Build and install packages according to dependencies;;
-	*d*)	Msg Downloading the necessary sources for building packages;;
 	*)	Msg View the process of building and installing packages
 	esac
 	while :; do
-		for N in $NEW; do /bin/touch $TMP/$N; done
+		for F in $NEW; do touch $TMP/$F; done
 		LST=$(Lst ' ' \#)
 		. $TMP/PKG.new
 		case $CMD in *b*);; *) return;; esac
 		Msg Creating a list of dependencies for packages
+		CheckPackages $PKGMK_PACKAGE_DIR/PKG.ldd >$TMP/PKG.ldd
 		CreateUse >$TMP/PKG.use && break ||
-		Msg Rebuilding and upgrade problematic packages
-		NEW=$(/bin/sed '' $TMP/PKG.use)
+		Ask Rebuilding and upgrade problematic packages || End
+		NEW=$(sed '' $TMP/PKG.use)
 	done
-	/bin/sed -i "1!G;h;\$!d;s/\$/\n$EXT/" $TMP/PKG.use
-	N=${PKGMK_PACKAGE_DIR:-$PORTS_DIR}
-	/bin/cp $TMP/PKG.* $N
-	[ $N = $PORTS_DIR ] || /bin/rm -f $PORTS_DIR/PKG.new $PORTS_DIR/PKG.use
+	sed -i "1!G;h;\$!d;s/\$/\n$EXT/" $TMP/PKG.use
+	cp $TMP/PKG.* $PKGMK_PACKAGE_DIR
 }
-RmCmd() { Msg rm $1; case $CMD in *b*) /bin/rm $1;; esac; }
+RmCmd() { Msg rm $1; case $CMD in *b*) rm $1;; esac; }
 DeleteUnused() {
 	case $CMD in ''|*z*);; *) return;; esac
-	echo ${PKGMK_SOURCE_DIR:+$PKGMK_SOURCE_DIR/*} \
-		${PKGMK_PACKAGE_DIR:+$PKGMK_PACKAGE_DIR/*#*} |
-	/usr/bin/awk -vE=$EXT -vP=$PKGMK_PACKAGE_DIR -vS=$PKGMK_SOURCE_DIR '
+	echo $PKGMK_SOURCE_DIR/* $PKGMK_PACKAGE_DIR/*#* $WRK/[a-z]* |
+	awk -vA=$WRK/ -vE=$EXT -vP=$PKGMK_PACKAGE_DIR/ -vS=$PKGMK_SOURCE_DIR/ '
 	/^Pkg/ {
+		F[A $4] = 0
 		for(i = 3; i++ < NF;) {
 			if($i ~ /^-/) {
-				if($i ~ /r/ && P)
-					F[P "/" $4 "#" $3 ".post-install"] = 0
+				if($i ~ /r/) F[P $4 "#" $3 ".post-install"] = 0
 				break
 			}
-			if(P) F[P "/" $i "#" $3 E] = 0
+			F[P $i "#" $3 E] = 0
 		}
 		for(; i++ < NF;) {
 			if($i == "#") break
-			if(sub(/^.+\//, "", $i) && S) F[S "/" $i] = 0
+			if(sub(/^.+\//, "", $i)) F[S $i] = 0
 		}
 		next
 	}
-	/\// {
-		for(i = 0; i++ < NF;)
-			if(!($i in F || $i ~ /*/)) print "RmCmd " $i
+	/^\// {
+		for(i = 0; i++ < NF;) {
+			if($i ~ /*/ || $i in F) continue
+			if($i ~ "^" A) {
+				f = $i; sub(/#.*/, "", f)
+				if(f in F) continue
+			 }
+			print "RmCmd " $i
+		}
 	}' $TMP/PKG.new - >$TMP/Del
-	[ ! -s $TMP/Del ] && return ||
-	Msg Delete unused source files and packages
+	[ -s $TMP/Del ] || return 0
+	Msg Removing unused sources, packages and patches 
 	. $TMP/Del
 }
 CheckReject() {
-	[ -z "$(/usr/bin/find /var/lib/pkg/rejected -type f)" ] && return ||
+	[ -z "$(find /var/lib/pkg/rejected -type f)" ] && return ||
 	Wrn Found files rejected during package upgrades
-	case $CMD in *b*) ! Ask Run rejmerge || /usr/bin/rejmerge;; esac
+	case $CMD in *b*) ! Ask Run rejmerge || rejmerge;; esac
 }
 PortsInfo() {
-	local F L
-	F=${PKGMK_PACKAGE_DIR:-$PORTS_DIR}
-	L=$F/PKG.new\ $F/PKG.use
-	for F in $L; do [ -f $F -a -s $F ] || End Missing file $F!; done
-	{
-		[ -f $PORTS_DIR/PKG.chk ] &&
-			/bin/sed '/^[a-z]/!d;s/^/Ign /' $PORTS_DIR/PKG.chk
-	} | /usr/bin/awk -vPKG="$NEW" '
+	L="$PKGMK_PACKAGE_DIR/PKG.new $PKGMK_PACKAGE_DIR/PKG.use"
+	RequiredFiles $L
+	{ sed '/^[a-z]/!d;/\s/d;s/^/Ign /' $CFG; } | awk -vPKG="$NEW" '
 	function Set(c,v,p,r) { C[p] = c; V[p] = v; L[p "#" v] = p; R[p] = r }
+	function Out(t,l,a,h,i) {
+		if(split(l, a) == 0) return
+		print t
+		for(i in a) h[a[i]] = a[i]
+		asort(h)
+		for(i in h) print "\t\t" h[i]
+	}
 	/^Pkg/ {
 		Set($2, $3, p = $4, "")
 		for(i = 4; ++i; ) {
@@ -763,7 +637,7 @@ PortsInfo() {
 		}
 		sub(/^.*# */, "")
 		R[p] = $0
-		for(i = 0; i++ < NF; ) N[$i]++
+		for(i = 0; i++ < NF; ) { N[$i]++; B[$i] = B[$i] " " p }
 		next
 	}
 	/^Who/ { W[$2] = $3; next }
@@ -771,7 +645,8 @@ PortsInfo() {
 	{
 		if(!($1 in L)) next
 		p = L[$1]; sub(/^[^ ]* */, ""); U[p] = $0
-		if(C[p] !~ /\//) for(i = 0; i++ < NF; ) J[$i]++
+		if(C[p] ~ /\//) next
+		for(i = 0; i++ < NF; ) { J[$i]++; E[$i] = E[$i] " " p }
 	}
 	END {
 		if(split(PKG, L)) {
@@ -788,10 +663,10 @@ PortsInfo() {
 				if(p in A) print "Add-ons:\tyes"
 				if(p in P) print "Patch:\t\tyes"
 				if(p in S) print "Post-install:\tyes"
-				if(split(R[p], u)) print "Requires:"
-				for(i in u) print "\t\t" u[i]
-				if(split(U[p], u)) print "Use:"
-				for(i in u) print "\t\t" u[i]
+				Out("Requires:", R[p])
+				Out("Use:", U[p])
+				Out("Required for build:", B[p])
+				Out("Required for use:", E[p])
 			}
 		} else {
 			print "Maybe unnecessary ports:"
@@ -802,23 +677,12 @@ PortsInfo() {
 			for(i in a) print a[i]
 		}
 	}' $L -
-	End
 }
 FilesNotInPackages() {
 	{
-	/usr/bin/find $(
-		if [ -f $PORTS_DIR/PKG.chk ]; then
-			/bin/sed '/^\//!d;s/\s.*$//' $PORTS_DIR/PKG.chk
-		else
-			M=$(/bin/mount | /bin/sed 's/.* on \([^ ]*\) .*/\1/
-				/\/$/d;H;$!d;x;s/\n/ /g')
-			for P in /boot /home /lib/modules /root \
-				/usr/ports /usr/src /var/lib/pkg; do
-				case " $M " in *\ $P\ *);; *) echo $P/;; esac
-			done
-		fi ) -mount 2>/dev/null | /bin/sed 's%^/%%;/^$/d'
-	/usr/bin/find / -mount
-	} | /usr/bin/awk '
+	find $(sed '/^\//!d;s/\s.*$//' $CFG) -mount 2>/dev/null | sed 's%^/%%'
+	find / -mount
+	} | awk '
 	/^\// {
 		sub(/^\//, "")
 		if($0 in L) delete L[$0]; else L["/" $0] = "/" $0
@@ -833,39 +697,12 @@ FilesNotInPackages() {
 		asort(L)
 		for(p in L) print L[p]
 	}' /var/lib/pkg/db -
-	End
+}
+RequiredFiles() { # File ...
+	for F do [ -f $F -a -r $F ] || End Could not read file $F!; done
 }
 #
 # Main
-#
-CMD=
-PID=
-while getopts bdehilpuz NEW; do
-	case $NEW in
-	h) echo "$HLP"; End;;
-	[!bdeilpuz]) End "\rUsage: pkgnew [-bdeilpuz] [name ...]"
-	esac
-	case $CMD$NEW in
-	*$NEW*$NEW);;
-	[eilp][bdeilpuz]|[bduz]*[eilp])
-		End Option -$NEW incompatibility with -$CMD!;;
-	*) CMD=$CMD$NEW
-	esac
-done
-shift $(($OPTIND - 1))
-case $#$CMD in 1[ep]);; *[ep]) End Option -$CMD requires one argument!;; esac
-case $CMD in *u*) HLP=collection;; *) HLP=port;; esac
-for NEW do
-	case -$NEW- in
-	*--*|*[!a-z0-9_+-]*|-[0-9_+]*) End "Invalid $HLP name '$NEW'!"
-	esac
-done
-case $CMD in *[bl]*)
-[ $(/usr/bin/id -u) = 0 ] || Ask This should be done as root. Continue || End
-esac
-NEW=$*
-#
-# Run
 #
 export LANG=C
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
@@ -873,26 +710,44 @@ export SHELL=/bin/sh
 set -e
 trap "End Terminated due an error!" 0
 trap "End Interrupted by signal!" 1 2 3 13 15
+CMD=
+LOG=
+TMP=
+while getopts behilpuz N; do
+	case $N in
+	h) echo "$NEW"; exit;;
+	[!beilpuz]) End "\rUsage: pkgnew [-beilpuz] [name ...]"
+	esac
+	case $CMD$N in
+	*$N*$N);;
+	[eilp]?|[buz]*[eilp]) End Option -$N incompatibility with -$CMD!;;
+	*) CMD=$CMD$N
+	esac
+done
+shift $(($OPTIND - 1))
+case $#$CMD in 1[ep]);; *[ep]) End Option -$CMD requires one argument!;; esac
+case $CMD in *u*) S=collection;; *) S=port;; esac
+for N do
+	case -$N- in
+	*--*|*[!a-z0-9_+-]*|-[0-9_+]*) End "Invalid $S name '$N'!"
+	esac
+done
+case $CMD in
+*[bluz]*) [ $(id -u) = 0 ] || End This can only be done as root!
+esac
+NEW=$*
+for N in $DIR $WRK; do [ -d $N ] || End Directory $N does not exist!; done
+RequiredFiles $CFG
 ReadConfig /etc/pkgmk.conf
-[ "x$CMD" != xi ] || PortsInfo
-[ "x$CMD" != xl ] || FilesNotInPackages
-GetCollectionsList
-TMP=/tmp/.pkgnew
+TMP=$(mktemp -dq) || End Unable to create temporary directory!
 LOG=$TMP/Log
-/bin/mkdir -p $TMP
-{
-/usr/bin/flock -n 9 || End Аnother task is running!
-/bin/rm -f $TMP/*
 case $CMD in
 [ep])	EditPatch $1;;
-*)	Clock Start
-	cd $PORTS_DIR
-	UpdateCollections
+i)	PortsInfo;;
+l)	FilesNotInPackages;;
+*)	GetCollectionsList
 	BuildPackages
 	DeleteUnused
-	Clock Successful completion
 	CheckReject
 esac
-/bin/rm -r $TMP
-} 9<$TMP
 End

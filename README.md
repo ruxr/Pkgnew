@@ -14,8 +14,7 @@ the results of the work **pkgnew**.
 4. Build a *basic* package and a *developer* package from the single port
 5. Auto add user for package if required
 6. Auto run *post-install* script for package if required
-7. Save package build log on error
-8. Show current task and total time
-9. Remove unused packages and sources for its
-10. Installing packages for the system in accordance with its functional role
-11. Updating packages over the network
+7. Hide the work log, but show its last 10 lines on error 
+8. Remove unused packages and sources for its
+9. Installing packages for the system in accordance with its functional role
+10. Updating packages over the network

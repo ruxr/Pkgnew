@@ -29,10 +29,7 @@ and package build description from
 .SH OPTIONS
 .TP
 .I -b
-Build packages
-.TP
-.I -d
-Download source
+Build and install packages
 .TP
 .I -e
 Edit working Pkgfile
@@ -47,7 +44,7 @@ Information about specified packages or a list of possible unused ports
 List of files that do not belong to installed packages
 .TP
 .I -p
-Show differences between original and build Pkgfile
+Show differences between original and used Pkgfile
 .TP
 .I -u
 Update the port collections
@@ -90,23 +87,44 @@ checks:
   	...
   }
 
-If the
-.I Pkgfile.patch
-file is present in the port directory, it is used to create a working
-build script.
+Before use
+.B pkgnew
+in
+.I /etc/pkgmk.conf
+must be defined variable
+.IR PKGMK_SOURCE_DIR ,
+.I PKGMK_PACKAGE_DIR
+and
+.IR PKGMK_WORK_DIR
+and have a
+.I /usr/ports/CRUX/PKG.cfg
+configuration file.
 
-If in the port directory there is a directory
-.IR add-ons ,
-then all files from it will be copied to the directory of working sources
-after checking the
-.IR .signature .
+In the first step,
+.B pkgnew
+checks the installed and specified by the command line packages and builds
+a script to build them in the order of dependencies. For this, the descriptions
+of building packages with applied patches, if any, are used.
+
+In the next step,
+.B pkgnew
+organizes the execution of the resulting script to get and install changed or
+new packages. To do this, using
+.IR wget ,
+the necessary sources are downloaded and the checksums from
+.I .signature
+are checked. Then, if any, add-ons from
+.I
+are copied and the package build script is run. If a package requires
+a specific user, it is created before building the package. 
 
 At the end of the work,
 .B pkgnew
-creates the resulting list of packages
-.I ${PKGMK_PACKAGE_DIR:-/usr/ports}/PKG.use
-for
+creates a list of libraries required for each package and creates a list of
+packages for installation by
 .BR pkguse .
+
+Finally, it removes unused sources and packages.
 .SH EXAMPLES
 .B 1.
 Updating the ports collection
@@ -118,7 +136,7 @@ and show the process of building and installing changed packages:
 .B 2.
 Building used packages and upgrading them:
 
-  # pkgnew -bd
+  # pkgnew -b
 
 .B 3.
 Building and installing the missing package and all the dependencies required
@@ -126,17 +144,12 @@ by it, for example, installing the
 .I cdrkit
 package:
 
-  # pkgnew -bd cdrkit
+  # pkgnew -b cdrkit
 
 .B 4.
 Delete unused files after building packages:
 
   # pkgnew -bz
-
-NOTE: Only for files from directories defined by the configuration variables
-.I PKGMK_SOURCE_DIR
-and
-.I PKGMK_PACKAGE_DIR
 
 .B 5.
 An example of splitting
@@ -174,21 +187,6 @@ port:
 Default user's editor.
 .SH FILES
 .TP
-.I Pkgfile
-Package build description.
-.TP
-.I Pkgfile.patch
-Patch for build description.
-.TP
-.I .pkguse
-List of libraries used by the package.
-.TP
-.I .signature
-SHA256 checksum and signify checksum.
-.TP
-.I add-ons/
-Directory for additional files.
-.TP
 .I /etc/pkgmk.conf
 Global package make configuration.
 .TP
@@ -201,23 +199,40 @@ Directory for driver scripts.
 .I /usr/ports/
 Root of local ports collection.
 .TP
-.I /usr/ports/PKG.chk
-Ports and paths exception configuration file.
+.I /usr/ports/{REPO}/{NAME}/.signature
+SHA256 checksum and signify checksum for port
+.IR NAME .
 .TP
-.I /usr/ports/PKG.grp
-Role and group configuration file.
+.I /usr/ports/{REPO}/{NAME}/Pkgfile
+Package build description for port
+.IR NAME .
 .TP
-.I ${PKGMK_PACKAGE_DIR:-/usr/ports}/PKG.new
+.I /usr/ports/CRUX/
+Directory for
+.B pkgnew
+work files.
+.TP
+.I /usr/ports/CRUX/PKG.cfg
+Configuration file for
+.BR pkgnew .
+.TP
+.I /usr/ports/CRUX/{NAME}
+Patch for building a package for port
+.IR NAME .
+.TP
+.I /usr/ports/CRUX/{NAME}#{ADD-ONS}
+Additional files to build the port package
+.IR NAME .
+.TP
+.I ${PKGMK_PACKAGE_DIR}/PKG.new
 Resulting script used to build and install packages.
 .TP
-.I ${PKGMK_PACKAGE_DIR:-/usr/ports}/PKG.use
+.I ${PKGMK_PACKAGE_DIR}/PKG.ldd
+Resulting list of libraries used by packages.
+.TP
+.I ${PKGMK_PACKAGE_DIR}/PKG.use
 Resulting list of packages in order of dependencies to install with
 .BR pkguse .
-.TP
-.I /usr/bin/wget
-Used by
-.B pkgnew
-to download source code.
 .SH SEE ALSO
 .BR pkgadd (8),
 .BR pkginfo (8),
