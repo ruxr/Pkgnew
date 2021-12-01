@@ -141,8 +141,7 @@ PortsOrder() {
 	END {
 		if(E) exit 1
 		for(n in Val) {
-			delete s
-			split(Dep[n], a)
+			delete s; split(Dep[n], a)
 			for(i in a) s[a[i]] = a[i]
 			if("ALL" in s) ALL[n] = 0
 			delete s[n]
@@ -150,19 +149,16 @@ PortsOrder() {
 				l = ""
 				for(j in s) {
 					if(j in Bad) Bad[j] = Bad[j] " " n
-					delete u
-					u[n] = l = j
+					delete u; u[n] = l = j
 					while(split(l, a)) {
-						l = ""
-						for(i in a) Reg(a[i])
+						l = ""; for(i in a) Reg(a[i])
 					}
 					delete u[j]
 					for(i in s) if(i in u) delete s[l = i]
 					if(l) break
 				}
 			} while(l)
-			asort(s)
-			for(i in s) l = l " " s[i]
+			asort(s); for(i in s) l = l " " s[i]
 			Dep[n] = l
 		}
 		for(n in Bad) b[n] = n
@@ -178,8 +174,7 @@ PortsOrder() {
 		Dep[Ord[n] = Val[n] = n = "ALL"] = l
 		asort(Ord)
 		do {
-			n = 0
-			for(i in Ord) if(Out(Ord[i])) delete Ord[n = i]
+			n = 0; for(i in Ord) if(Out(Ord[i])) delete Ord[n = i]
 		} while(n)
 		if(asort(Ord)) {
 			Err("Errors in dependency order:")
@@ -355,8 +350,7 @@ CheckPackages() {
 		END {
 			asort(U)
 			for(n in U) {
-				l = n = U[n]
-				sub(/.*\//, "", n)
+				l = n = U[n]; sub(/.*\//, "", n)
 				if(n in N) if(!(l in L)) P = P " " l
 			}
 			print P
@@ -405,12 +399,14 @@ CreateUse() {
 	}
 	END {
 		delete Lib
-		for(n in U) { Err("missing " n " required by" U[n]); print U[n] }
+		for(n in U) {
+			Err("missing " n " required by" U[n]); print U[n]
+		}
 		if(E) exit 1
 		for(n in P) Err("missing package " n " required by" P[n])
 		for(n in G) {
-			split(G[n], a); delete u; for(i in a) u[a[i]] = a[i]
-			l = ""; asort(u); for(i in u) l = l " " u[i]
+			split(G[n], a); l = ""
+			asort(a); for(i in a) l = l " " a[i]
 			Val[Ord[++c] = n = toupper(n)] = "0"
 			Grp[n] = Dep[n] = l; All(n)
 		}
@@ -617,12 +613,10 @@ PortsInfo() {
 	RequiredFiles $L
 	{ sed '/^[a-z]/!d;/\s/d;s/^/Ign /' $CFG; } | awk -vPKG="$NEW" '
 	function Set(c,v,p,r) { C[p] = c; V[p] = v; L[p "#" v] = p; R[p] = r }
-	function Out(t,l,a,h,i) {
-		if(split(l, a) == 0) return
-		print t
-		for(i in a) h[a[i]] = a[i]
-		asort(h)
-		for(i in h) print "\t\t" h[i]
+	function Out(t,l,a,i) {
+		if(split(l, a)) {
+			print t; asort(a); for(i in a) print "\t\t" a[i]
+		}
 	}
 	/^Pkg/ {
 		Set($2, $3, p = $4, "")
@@ -635,8 +629,7 @@ PortsInfo() {
 			}
 			Set($2 "/" p, $3, $i, p)
 		}
-		sub(/^.*# */, "")
-		R[p] = $0
+		sub(/^.*# */, ""); R[p] = $0
 		for(i = 0; i++ < NF; ) { N[$i]++; B[$i] = B[$i] " " p }
 		next
 	}
@@ -673,8 +666,7 @@ PortsInfo() {
 			for(p in V)
 				if(C[p] !~ /\// && !(p in N) && !(p in J))
 					a[p] = p
-			asort(a)
-			for(i in a) print a[i]
+			asort(a); for(i in a) print a[i]
 		}
 	}' $L -
 }
@@ -690,12 +682,10 @@ FilesNotInPackages() {
 	}
 	/\// {	sub(/\/$/, ""); L[$0] = $0 }
 	END {
-		delete L["/"]
-		delete L["/lib64"]
+		delete L["/"]; delete L["/lib64"]
 		print "List of files not included in packages:"
 		L[0] = "List of missing files included in packages:"
-		asort(L)
-		for(p in L) print L[p]
+		asort(L); for(p in L) print L[p]
 	}' /var/lib/pkg/db -
 }
 RequiredFiles() { # File ...
@@ -715,7 +705,7 @@ LOG=
 TMP=
 while getopts behilpuz N; do
 	case $N in
-	h) echo "$NEW"; exit;;
+	h) echo "$NEW"; trap 0; exit;;
 	[!beilpuz]) End "\rUsage: pkgnew [-beilpuz] [name ...]"
 	esac
 	case $CMD$N in
