@@ -334,16 +334,16 @@ CheckPackages() {
 			*.def|*.ot[ft]|*.dat|*.la|*.conf|*.pod|*.m4|*.html| \
 			*.ttf|*.gif|*.mod|*.json|*.jar|*.xsl) continue
 			esac
-			echo "# /$F"
-			case $(file -b /$F) in
-			*ELF*) ldd /$F; objdump -p /$F | sed '/NEEDED/!d';;
-			*[Pp]erl*) echo "/usr/bin/perl =>";;
-			*[Pp]ython*) echo "/usr/bin/python =>"
+			F=/$F; echo "# $F"
+			case $(file -b $F) in
+			*ELF*) ldd $F; objdump -p $F | sed -n 's/ NEEDED /-/p';;
+			*[Pp]erl*) echo "/usr/bin/perl =>\n- perl";;
+			*[Pp]ython*) echo "/usr/bin/python =>\n- python"
 			esac
 		done 2>/dev/null | awk -vP="$P ${P%-dev}" '
-		/NEEDED/ { N[$2] = 0; next }
 		{
 			if($1 == "#") L[$2] = 0
+			else if($1 == "-") N[$2] = 0
 			else if($3 ~ /\//) U[$3] = $3
 			else if($2 == "=>") U[$1] = $1
 		}
