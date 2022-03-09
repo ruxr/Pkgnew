@@ -1,4 +1,5 @@
 #!/bin/sh
+DB=/var/lib/pkg/db
 DIR=/usr/ports
 WRK=$DIR/CRUX
 CFG=$WRK/PKG.cfg
@@ -27,10 +28,7 @@ Report bugs to <r.oreshnikov@gmail.com>"
 Wrn() { echo "\rpkgnew: $*" >&2; }
 Msg() { case $1 in [A-Z]*) echo $*;; *) echo \	$*;; esac >&2; }
 Inf() { echo "======> $*"; }
-Lst() {
-	sed "${x;s/\n/ /g;q}
-		/\//d;/^$/d;/^lib64/d;N;s/\n$1/;H;d" /var/lib/pkg/db
-}
+Lst() { sed "\${x;s/\n/ /g;q};/\//d;/^$/d;/^lib64/d;N;s/\n$1/;H;d" $DB; }
 End() {
 	trap 0
 	[ -s "$LOG" ] && Wrn Last 10 lines of hidden output && tail $LOG >&2
@@ -329,7 +327,7 @@ CheckPackages() {
 		END { split(L, P); for(n in P) if(N[P[n]] < 2) print P[n] }' $1)
 	do
 		export LD_LIBRARY_PATH=$(sed "/^$P\s/!d;s/.*\s//" $CFG)
-		sed "/^$P$/,/^$/{/\//p};d" /var/lib/pkg/db |
+		sed "/^$P$/,/^$/{/\//p};d" $DB |
 		while read F; do
 			case $F in
 			*/|*.[acho]|*.svg|*.gz|*.png|*.hpp|*.pfb|*.xml|*.enc| \
@@ -368,7 +366,7 @@ CreateUse() {
 	{
 	sed -n '/^$/d;/^lib64$/d;/\//{s%^%/%;/\.so\./p;/\.so$/p
 		/^\/usr\/bin\/perl$/p;/^\/usr\/bin\/python$/p;d}
-		N;s%\n% %;s%^%= %p' /var/lib/pkg/db
+		N;s%\n% %;s%^%= %p' $DB
 	sed '/^[ \t]*\(#.*\)*$/d
 		:L /[ \t][ \t]*\\$/{N;b L};s/[ \t][ \t]*\\\n/ /g
 		s/[ \t]*#.*//;s/[ \t][ \t]*/ /g;/^[A-Z]/!d' $CFG
@@ -689,7 +687,7 @@ FilesNotInPackages() {
 		print "List of files not included in packages:"
 		L[0] = "List of missing files included in packages:"
 		asort(L); for(p in L) print L[p]
-	}' /var/lib/pkg/db -
+	}' $DB -
 }
 RequiredFiles() { # File ...
 	for F do [ -f $F -a -r $F ] || End Could not read file $F!; done
