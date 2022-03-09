@@ -27,7 +27,10 @@ Report bugs to <r.oreshnikov@gmail.com>"
 Wrn() { echo "\rpkgnew: $*" >&2; }
 Msg() { case $1 in [A-Z]*) echo $*;; *) echo \	$*;; esac >&2; }
 Inf() { echo "======> $*"; }
-Lst() { pkginfo -i | sed "s/$1/$2/;H;\$!d;x;s/\n/ /g"; }
+Lst() {
+	sed "${x;s/\n/ /g;q}
+		/\//d;/^$/d;/^lib64/d;N;s/\n$1/;H;d" /var/lib/pkg/db
+}
 End() {
 	trap 0
 	[ -s "$LOG" ] && Wrn Last 10 lines of hidden output && tail $LOG >&2
@@ -321,12 +324,12 @@ Who() { # Pkg User Uid [Group Gid] [Home [Comment]]
 	esac
 }
 CheckPackages() {
-	LST=$(Lst ' .*')
+	LST=$(Lst '.*/')
 	for P in $(awk -vL="$LST" '{ N[$1] = NF }
 		END { split(L, P); for(n in P) if(N[P[n]] < 2) print P[n] }' $1)
 	do
 		export LD_LIBRARY_PATH=$(sed "/^$P\s/!d;s/.*\s//" $CFG)
-		pkginfo -l $P |
+		sed "/^$P$/,/^$/{/\//p};d" /var/lib/pkg/db |
 		while read F; do
 			case $F in
 			*/|*.[acho]|*.svg|*.gz|*.png|*.hpp|*.pfb|*.xml|*.enc| \
@@ -546,7 +549,7 @@ EditPatch() {
 }
 BuildPackages() {
 	Msg Creating a list of required packages for building
-	PortsList $(Lst ' .*') $NEW | PortsOrder >$TMP/PKG.new ||
+	PortsList $(Lst '.*/') $NEW | PortsOrder >$TMP/PKG.new ||
 	case $? in
 	1) End Port collections need to be updated!;;
 	2) End Fail to create ports build list!
@@ -557,7 +560,7 @@ BuildPackages() {
 	esac
 	while :; do
 		for F in $NEW; do touch $TMP/$F; done
-		LST=$(Lst ' ' \#)
+		LST=$(Lst '/#')
 		. $TMP/PKG.new
 		case $CMD in *b*);; *) return;; esac
 		Msg Creating a list of dependencies for packages
