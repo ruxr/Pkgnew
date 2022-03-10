@@ -629,6 +629,7 @@ PortsInfo() {
 		}
 		sub(/^.*# */, ""); R[p] = $0
 		for(i = 0; i++ < NF; ) { N[$i]++; B[$i] = B[$i] " " p }
+		next
 	}
 	/^Who/ { W[$2] = $3 }
 	/^Ign/ { J[$2]++ }
