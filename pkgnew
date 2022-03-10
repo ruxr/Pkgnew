@@ -308,7 +308,12 @@ Pkg() { # Repo Ver-Rel Pkg ... -[apr] [Src ...]
 		esac
 		N=y F=$F#$V$EXT
 		Msg pkgadd $I $F
-		case $CMD in *b*) pkgadd $I $PKGMK_PACKAGE_DIR/$F; esac
+		case $CMD in *b*)
+			pkgadd $I $PKGMK_PACKAGE_DIR/$F ||
+			Ask Force install the package
+			Msg pkgadd -f $I $F
+			pkgadd -f $I $PKGMK_PACKAGE_DIR/$F
+		esac
 	done
 	[ -z "${N:+$U}" ] && return || F=$P#$V.$U
         Msg sh $F
