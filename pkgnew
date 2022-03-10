@@ -602,17 +602,17 @@ CheckReject() {
 	case $CMD in *b*) ! Ask Run rejmerge || rejmerge;; esac
 }
 PortsInfo() {
-	L="$PKGMK_PACKAGE_DIR/PKG.new $PKGMK_PACKAGE_DIR/PKG.use"
+	L="$PKGMK_PACKAGE_DIR/PKG.use $PKGMK_PACKAGE_DIR/PKG.new"
 	RequiredFiles $L
 	{ sed '/^[a-z]/!d;/\s/d;s/^/Ign /' $CFG; } | awk -vPKG="$NEW" '
-	function Set(c,v,p,r) { C[p] = c; V[p] = v; L[p "#" v] = p; R[p] = r }
+	function Set(c,p,r) { C[p] = c; R[p] = r }
 	function Out(t,l,a,i) {
 		if(split(l, a)) {
 			print t; asort(a); for(i in a) print "\t\t" a[i]
 		}
 	}
 	/^Pkg/ {
-		Set($2, $3, p = $4, "")
+		Set($2, p = $4, "")
 		for(i = 4; ++i; ) {
 			if($i ~ /^-/) {
 				if($i ~ /a/) A[p] = 0
@@ -620,18 +620,18 @@ PortsInfo() {
 				if($i ~ /r/) S[p] = 0
 				break
 			}
-			Set($2 "/" p, $3, $i, p)
+			Set($2 "/" p, $i, p)
 		}
 		sub(/^.*# */, ""); R[p] = $0
 		for(i = 0; i++ < NF; ) { N[$i]++; B[$i] = B[$i] " " p }
-		next
 	}
-	/^Who/ { W[$2] = $3; next }
+	/^Who/ { W[$2] = $3 }
 	/^Ign/ { J[$2]++ }
-	{
-		if(!($1 in L)) next
-		p = L[$1]; sub(/^[^ ]* */, ""); U[p] = $0
-		if(C[p] ~ /\//) next
+	/^[a-z]/ {
+		v = p = $1
+		sub(/#.*/, "", p); L[$1] = p
+		sub(/.*#/, "", v); V[p] = v
+		sub(/^[^ ]* */, ""); U[p] = $0
 		for(i = 0; i++ < NF; ) { J[$i]++; E[$i] = E[$i] " " p }
 	}
 	END {
