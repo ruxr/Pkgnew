@@ -309,7 +309,7 @@ Pkg() { # Repo Ver-Rel Pkg ... -[apr] [Src ...]
 		N=y F=$F#$V$EXT
 		Msg pkgadd $I $F
 		case $CMD in *b*)
-			pkgadd $I $PKGMK_PACKAGE_DIR/$F ||
+			pkgadd $I $PKGMK_PACKAGE_DIR/$F && continue ||
 			Ask Force install the package
 			Msg pkgadd -f $I $F
 			pkgadd -f $I $PKGMK_PACKAGE_DIR/$F
