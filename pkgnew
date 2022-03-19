@@ -39,7 +39,7 @@ End() {
 Ask() {
 	[ $# = 0 ] && A="Press Enter for continue" || A="$*? [N/y]"
 	read -p "pkgnew: $A " A
-	case $A in ''|[!Yy]*) return 1;; esac
+	case $A in [Yy]);; *) return 1;; esac
 }
 #
 # CreateBuildList subrouitines
