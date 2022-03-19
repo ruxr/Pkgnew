@@ -185,8 +185,17 @@ for P in $ALL; do
 	*\ $N#*) T=${USE#* $N#} T=${T%% *}; echo Upgrade $N $T to $V;;
 	*) T=; echo Install $N $V
 	esac
-	[ -z "$MOD" ] || ! Get $N $V$EXT ||
-		/usr/bin/pkgadd $OPT ${DST:+-r "$DST"} ${T:+-u} "$SRC"
+	if [ -n "$MOD" ]; then
+		Get $N $V$EXT
+		if ! /usr/bin/pkgadd $OPT ${DST:+-r "$DST"} ${T:+-u} "$SRC"
+		then
+			[ -z "$OPT" ]
+			Msg "Force install the package? [N/y/all] \c"
+			read A <&2
+			case $A in [Yy]);; [Aa]ll) OPT=-f;; *) exit 1;; esac
+			/usr/bin/pkgadd -f ${DST:+-r "$DST"} ${T:+-u} "$SRC"
+		fi
+	fi
 	case " $RUN " in
 	*\ $N\ *) echo Post-install $N $V
 		[ -z "$MOD" ] || ! Get $N $V.post-install ||
