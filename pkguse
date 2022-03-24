@@ -11,6 +11,7 @@ Options:
   -f      Force installation
   -h      Display this text
   -i      Ignore inverse dependencies
+  -k      Install kernel
   -r ROOT Specify alternative installation root
   -s      Synchronize packages, default: compare
   -u URL  MasterHost URL, default: $URL
@@ -64,6 +65,23 @@ Who() {
 		echo "$U:x:0::::::" >>"$DST/etc/shadow"
 	fi
 }
+Put() { /usr/bin/pkgadd $1 ${DST:+-r "$DST"} ${U:+-u} "$SRC"; }
+Exe() {
+	echo $1
+	[ -z "$MOD" ] && return || shift
+	Get $N $V$EXT
+	Put $OPT && return || [ -z "$OPT" ]
+	Msg "Force install the package? [N/y/all] \c"
+	read A <&2
+	case $A in [Yy]);; [Aa]ll) OPT=-f;; *) exit 1;; esac
+	Put -f
+}
+Run() {
+	echo $1
+	[ -z "$MOD" ] && return || shift
+	Get $@
+	/bin/sh "$SRC" ${DST:+"$DST"}
+}
 ADD=y
 CHK=
 DBD=/var/lib/pkg/db
@@ -75,23 +93,26 @@ MOD=
 NEW=
 OPT=
 PKG=
+REL=
+RUN=${URL##*/}
 SRC=
 USE=
 WRK=/tmp/.pkguse$$
-while getopts dfhir:su: V; do
+while getopts dfhikr:su: V; do
 	case $V in
 	d)	ADD=;;
 	f)	OPT=-f;;
 	h)	echo "$HLP"; exit 0;;
 	i)	IGN=y;;
+	k)	REL=$RUN;;
 	r)	DST=$OPTARG;;
 	s)	MOD=synchronized\ with;;
 	u)	URL=${OPTARG:-.};;
-	?)	Err '\rUsage: pkguse [-r root] [-u url] [-dfis] [pkg ...]'
+	?)	Err '\rUsage: pkguse [-r root] [-u url] [-dfiks] [pkg ...]'
 	esac
 done
 shift $(($OPTIND - 1))
-[ -z "$DEL" -o $# != 0 ] || Err Option -d requires a list of packages!
+[ -n "$ADD" -o $# != 0 ] || Err Option -d requires a list of packages!
 if [ -n "$DST" ]; then
 	[ -d "$DST" ] || Err $DST - no such directory!
 	case $DST in /*);; *) DST=$(pwd -P)/$DST;; esac
@@ -180,27 +201,25 @@ fi
 for P in $ALL; do
 	case $P in [a-z]*) N=${P%#*};; *) continue;; esac
 	case " $NEW " in *\ $N\ *) V=${P#*#};; *) continue;; esac
-	case " $WHO " in *\ :$N\ *) T=${WHO#*:$N } T=${T%%:*}; Who $T;; esac
+	case " $WHO " in *\ :$N\ *) U=${WHO#*:$N } U=${U%%:*}; Who $U;; esac
 	case " $USE " in
-	*\ $N#*) T=${USE#* $N#} T=${T%% *}; echo Upgrade $N $T to $V;;
-	*) T=; echo Install $N $V
+	*\ $N#*) U=${USE#* $N#} U=${U%% *}; Exe "Upgrade $N $U to $V";;
+	*) U=; Exe "Install $N $V"
 	esac
-	if [ -n "$MOD" ]; then
-		Get $N $V$EXT
-		if ! /usr/bin/pkgadd $OPT ${DST:+-r "$DST"} ${T:+-u} "$SRC"
-		then
-			[ -z "$OPT" ]
-			Msg "Force install the package? [N/y/all] \c"
-			read A <&2
-			case $A in [Yy]);; [Aa]ll) OPT=-f;; *) exit 1;; esac
-			/usr/bin/pkgadd -f ${DST:+-r "$DST"} ${T:+-u} "$SRC"
-		fi
-	fi
 	case " $RUN " in
-	*\ $N\ *) echo Post-install $N $V
-		[ -z "$MOD" ] || ! Get $N $V.post-install ||
-			/bin/sh "$SRC" ${DST:+"$DST"}
+	*\ $N\ *) Run "Post-install $N $V" $N $V.post-install
 	esac
 done
+if [ -n "$REL" ]; then
+	U=-kernel.run
+	if N=$(/bin/uname -n 2>/dev/null); then
+		N=$REL-$N P=$URL/$N$U
+		case $WRK in
+		"")	[ -f "$P" ] || N=;;
+		*)	/usr/bin/wget -q --spider "$P" || N=
+		esac
+	fi
+	Run "Install kernel ${N:-$REL}" "${N:-$REL}$U"
+fi
 Msg Done
 End

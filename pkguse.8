@@ -22,6 +22,9 @@ Display help
 .I -i
 Ignore inverse dependencies
 .TP
+.I -k
+Install kernel
+.TP
 .I -r ROOT
 Specify alternative installation root
 .TP
@@ -58,6 +61,13 @@ Default URL for download required files.
 .I http://crux/CRUX-3.5/PKG.use
 List of packages in order of dependencies for installation, created by
 .BR pkgnew .
+.TP
+.I http://crux/CRUX-3.5/CRUX-3.5-kernel.run
+Default Linux kernel installation script
+.TP
+.I http://crux/CRUX-3.5/CRUX-3.5-{HOSTNAME}-kernel.run
+Linux kernel installation script for a specific
+.I HOSTNAME
 .TP
 .I /usr/bin/wget
 Used by
