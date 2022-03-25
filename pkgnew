@@ -274,11 +274,7 @@ NewPackages() {
 Pkg() { # Repo Ver-Rel Pkg ... -[apr] [Src ...]
 	G=$1 V=$2 P=$3 D=$DIR/$1/$3
 	N=$(sed "/^$P$/{N;s/^.*\n//;q};d" $DB)
-	case /$N/ in
-	/$V/)	N=;;
-	//)	N=y;;
-	*)	[ "x${N%-[0-9]*}" = "x${V%-[0-9]*}" ] && V=$N N= || N=y
-	esac
+	[ "x${N%-[0-9]*}" = "x${V%-[0-9]*}" ] && V=$N N= || N=y
 	I= L= U=
 	shift 2
 	while [ -z "$I" ]; do
