@@ -12,6 +12,7 @@ Options:
   -h      Display this text
   -i      Ignore inverse dependencies
   -k      Install kernel
+  -l      List of files that do not belong to installed packages
   -r ROOT Specify alternative installation root
   -s      Synchronize packages, default: compare
   -u URL  MasterHost URL, default: $URL
@@ -19,7 +20,7 @@ Options:
 Report bugs to <r.oreshnikov@gmail.com>"
 Msg() { echo pkguse: $* >&2; }
 Err() { Msg $*; exit 1; }
-End() { trap 0; [ -z "$WRK" ] || /bin/rm -rf $WRK; [ $# = 0 ] || Err $*; }
+End() { trap 0; [ -z "$WRK" ] || /bin/rm -rf $WRK; [ $# = 0 ] || Err $*; exit; }
 Add() { ADD=; for V do [ $V = $N ] && NEW=$NEW\ $V || ADD=$ADD\ $V; done; }
 Del() { DEL=; for V do [ $V = $R ] || DEL=$DEL\ $V; done; }
 Pkg() { PKG=; for V do V=${V%#*}; [ $V = $N ] || PKG=$PKG\ $V; done; }
@@ -82,7 +83,37 @@ Run() {
 	Get $@
 	/bin/sh "$SRC" ${DST:+"$DST"}
 }
+Lst() {
+	WRK=
+	cd ${DST:-/}
+	/usr/bin/find ./ -mount 2>/dev/null | /usr/bin/awk '
+	/^\./ {
+		sub(/^\.\/*/, "")
+		if($0 in L) { delete L[$0]; next }
+		switch($0) {
+		case /^(boot)|(home)|(root)\//:
+		case /^etc\/ssh\/ssh_host_.*_key(\.pub)?$/:
+		case /^lib\/modules\//:
+		case /^lost\+found\/?/:
+		case /^usr\/(ports)|(src)\/?/:
+		case /^var\/(cache)|(lib)|(log)|(run)|(spool)\//:
+		case /^(lib64)?$/:	next
+		}
+		F[$0] = "/" $0
+		next
+	}
+	/\// {	sub(/\/$/, ""); L[$0] = $0 }
+	END {
+		delete L["lib64"]
+		print "### List of files not included in packages:"
+		asort(F); for(p in F) print F[p]
+		print "### List of missing files included in packages:"
+		asort(L); for(p in L) print L[p]
+	}' $DBD -
+	End
+}
 ADD=y
+ALL=
 CHK=
 DBD=/var/lib/pkg/db
 DEL=
@@ -98,17 +129,18 @@ RUN=${URL##*/}
 SRC=
 USE=
 WRK=/tmp/.pkguse$$
-while getopts dfhikr:su: V; do
+while getopts dfhiklr:su: V; do
 	case $V in
 	d)	ADD=;;
 	f)	OPT=-f;;
 	h)	echo "$HLP"; exit 0;;
 	i)	IGN=y;;
 	k)	REL=$RUN;;
+	l)	ALL=y;;
 	r)	DST=$OPTARG;;
 	s)	MOD=synchronized\ with;;
 	u)	URL=${OPTARG:-.};;
-	?)	Err '\rUsage: pkguse [-r root] [-u url] [-dfiks] [pkg ...]'
+	?)	Err '\rUsage: pkguse [-r root] [-u url] [-dfikls] [pkg ...]'
 	esac
 done
 shift $(($OPTIND - 1))
@@ -131,6 +163,7 @@ done
 set -e
 trap "End Terminated due to error!" 0
 trap "End Interrupted by signal!" 1 2 3 13 15
+[ -z "$ALL" ] || Lst
 Msg Packages are ${MOD:-compared to} $URL${DST:+ for $DST}
 [ ! -f "$DBD" ] || USE=$(/bin/sed '${x;s/\n/ /g;q}
 	/\//d;/^$/d;/^lib64/d;N;s/\n/#/;H;d' "$DBD")

@@ -16,7 +16,6 @@ Options:
   -e  Edit working Pkgfile
   -h  Display this text
   -i  Information about specified packages or a list of possible unused ports
-  -l  List of files that do not belong to installed packages
   -p  Show differences between original and used Pkgfile
   -u  Update the port collections
   -z  Delete unused source files and packages after build
@@ -665,24 +664,6 @@ PortsInfo() {
 		}
 	}' $L -
 }
-FilesNotInPackages() {
-	{
-	find $(sed '/^\//!d;s/\s.*$//' $CFG) -mount 2>/dev/null | sed 's%^/%%'
-	find / -mount
-	} | awk '
-	/^\// {
-		sub(/^\//, "")
-		if($0 in L) delete L[$0]; else L["/" $0] = "/" $0
-		next
-	}
-	/\// {	sub(/\/$/, ""); L[$0] = $0 }
-	END {
-		delete L["/"]; delete L["/lib64"]
-		print "List of files not included in packages:"
-		L[0] = "List of missing files included in packages:"
-		asort(L); for(p in L) print L[p]
-	}' $DB -
-}
 RequiredFiles() { # File ...
 	for F do [ -f $F -a -r $F ] || End Could not read file $F!; done
 }
@@ -698,14 +679,14 @@ trap "End Interrupted by signal!" 1 2 3 13 15
 CMD=
 LOG=
 TMP=
-while getopts behilpuz N; do
+while getopts behipuz N; do
 	case $N in
 	h) echo "$NEW"; trap 0; exit;;
-	[!beilpuz]) End "\rUsage: pkgnew [-beilpuz] [name ...]"
+	[!beipuz]) End "\rUsage: pkgnew [-beipuz] [name ...]"
 	esac
 	case $CMD$N in
 	*$N*$N);;
-	[eilp]?|[buz]*[eilp]) End Option -$N incompatibility with -$CMD!;;
+	[eip]?|[buz]*[eip]) End Option -$N incompatibility with -$CMD!;;
 	*) CMD=$CMD$N
 	esac
 done
@@ -718,7 +699,7 @@ for N do
 	esac
 done
 case $CMD in
-*[bluz]*) [ $(id -u) = 0 ] || End This can only be done as root!
+*[buz]*) [ $(id -u) = 0 ] || End This can only be done as root!
 esac
 NEW=$*
 for N in $DIR $WRK; do [ -d $N ] || End Directory $N does not exist!; done
@@ -729,7 +710,6 @@ LOG=$TMP/Log
 case $CMD in
 [ep])	EditPatch $1;;
 i)	PortsInfo;;
-l)	FilesNotInPackages;;
 *)	GetCollectionsList
 	BuildPackages
 	DeleteUnused
