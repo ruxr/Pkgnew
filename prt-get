@@ -1,0 +1,9 @@
+#!/bin/sh
+#
+#	@(#) prt-get V1.0 (C) 2022 by Roman Oreshnikov
+#
+[ "x$1" != xisinst ] && echo "Usage: ${0##*/} isinst {pkg} ..." >&2 && exit 1
+shift
+for P do
+	sed -n "/^$P$/!d;q1" /var/lib/pkg/db && exit 1 || :
+done

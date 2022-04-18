@@ -18,7 +18,7 @@ RM	= /bin/rm
 SED	= /bin/sed
 TAR	= /bin/tar
 
-BIN	= pkgnew pkguse
+BIN	= pkgnew pkguse prt-get
 MAN	= pkgnew.8 pkguse.8
 SRC	= Makefile README.md $(BIN) $(MAN) PKG.cfg
 
