@@ -1,5 +1,5 @@
 #
-#	@(#) Makefile V2.2.0 (C) 2019-2022 by Roman Oreshnikov
+#	@(#) Makefile V2.2.1 (C) 2019-2022 by Roman Oreshnikov
 #
 CRUX	= 3.6
 BINDIR	= /usr/sbin
