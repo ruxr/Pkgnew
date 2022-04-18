@@ -1,6 +1,8 @@
 #!/bin/sh
-DB=/var/lib/pkg/db
+DBD=/var/lib/pkg/db
 DIR=/usr/ports
+ETC=/etc/ports
+DRV=$ETC/drivers
 WRK=$DIR/CRUX
 CFG=$WRK/PKG.cfg
 NEW="Update and build CRUX packages
@@ -27,7 +29,7 @@ Report bugs to <r.oreshnikov@gmail.com>"
 Wrn() { echo "\rpkgnew: $*" >&2; }
 Msg() { case $1 in [A-Z]*) echo $*;; *) echo \	$*;; esac >&2; }
 Inf() { echo "======> $*"; }
-Lst() { sed "\${x;s/\n/ /g;q};/\//d;/^$/d;/^lib64/d;N;s/\n$1/;H;d" $DB; }
+Lst() { sed "\${x;s/\n/ /g;q};/\//d;/^$/d;/^lib64/d;N;s/\n$1/;H;d" $DBD; }
 End() {
 	trap 0
 	[ -s "$LOG" ] && Wrn Last 10 lines of hidden output && tail $LOG >&2
@@ -41,7 +43,7 @@ Ask() {
 	case $A in [Yy]);; *) return 1;; esac
 }
 #
-# CreateBuildList subrouitines
+# Ports subrouitines
 #
 PortPkgfile() { # Repo Port Pkgfile [Flag]
 	N=./Pkgfile S=
@@ -208,7 +210,7 @@ NewPackages() {
 		ln -s $F .
 	done
 	if [ -f $D/.signature ]; then
-		F=/etc/ports/$G.pub
+		F=$ETC/$G.pub
 		[ -s $F ] && F=-p\ $F || F=
 		signify -qCx $D/.signature $F
 	fi
@@ -272,7 +274,7 @@ NewPackages() {
 }
 Pkg() { # Repo Ver-Rel Pkg ... -[apr] [Src ...]
 	G=$1 V=$2 P=$3 D=$DIR/$1/$3
-	N=$(sed "/^$P$/{N;s/^.*\n//;q};d" $DB)
+	N=$(sed "/^$P$/{N;s/^.*\n//;q};d" $DBD)
 	[ "x${N%-[0-9]*}" = "x${V%-[0-9]*}" ] && V=$N N= || N=y
 	I= L= U=
 	shift 2
@@ -335,7 +337,7 @@ CheckPackages() {
 		END { split(L, P); for(n in P) if(N[P[n]] < 2) print P[n] }' $1)
 	do
 		export LD_LIBRARY_PATH=$(sed "/^$P\s/!d;s/.*\s//" $CFG)
-		sed "/^$P$/,/^$/{/\//p};d" $DB |
+		sed "/^$P$/,/^$/{/\//p};d" $DBD |
 		while read F; do
 			case $F in
 			*/|*.[acho]|*.svg|*.gz|*.png|*.hpp|*.pfb|*.xml|*.enc| \
@@ -374,7 +376,7 @@ CreateUse() {
 	{
 	sed -n '/^$/d;/^lib64$/d;/\//{s%^%/%;/\.so\./p;/\.so$/p
 		/^\/usr\/bin\/perl$/p;/^\/usr\/bin\/python$/p;d}
-		N;s%\n% %;s%^%= %p' $DB
+		N;s%\n% %;s%^%= %p' $DBD
 	sed '/^[ \t]*\(#.*\)*$/d
 		:L /[ \t][ \t]*\\$/{N;b L};s/[ \t][ \t]*\\\n/ /g
 		s/[ \t]*#.*//;s/[ \t][ \t]*/ /g;/^[A-Z]/!d' $CFG
@@ -500,9 +502,9 @@ GetCollectionsList() {
 		F=${F#$DIR/} F=${F%%/*}
 		case " $D$USE " in *\ $F\ *);; *) USE=$USE\ $F;; esac
 	done
-	for D in /etc/ports/drivers/*; do
+	for D in $DRV/*; do
 		[ ! -x $D ] ||
-		for F in /etc/ports/*.${D##*/}; do
+		for F in $ETC/*.${D##*/}; do
 			F=${F##*/}
 			[ "x${F%%.*}" = "x*" ] || UPD=$UPD\ $F
 			case " $USE " in *\ ${F%%.*}\ *) continue;; esac
@@ -523,7 +525,7 @@ GetCollectionsList() {
 		D=${F#*.} F=${F%%.*}
 		case " ${NEW:-$UPD} " in *\ $F[\ .]*)
 			Msg collection $F
-			/etc/ports/drivers/$D /etc/ports/$F.$D >$LOG 2>&1; >$LOG
+			$DRV/$D $ETC/$F.$D >$LOG 2>&1; >$LOG
 		esac
 	done
 	F=${CMD%u*} CMD=$F${CMD#*u} NEW=
