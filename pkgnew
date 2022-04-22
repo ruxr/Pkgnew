@@ -701,7 +701,7 @@ for N do
 	esac
 done
 case $CMD in
-*[buz]*) [ $(id -u) = 0 ] || End This can only be done as root!
+*b*) [ $(id -u) = 0 ] || End This can only be done as root!
 esac
 NEW=$*
 for N in $DIR $WRK; do [ -d $N ] || End Directory $N does not exist!; done
