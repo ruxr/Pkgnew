@@ -326,6 +326,7 @@ CheckPackages() {
 			F=/$F; echo "# $F"
 			case $(file -b $F) in
 			*ELF*) ldd $F; objdump -p $F | sed -n 's/ NEEDED /-/p';;
+			symbolic\ link*) echo $(readlink -m $F) "=>";;
 			*[Pp]erl*) echo "/usr/bin/perl =>\n- perl";;
 			*[Pp]ython*) echo "/usr/bin/python =>\n- python"
 			esac
