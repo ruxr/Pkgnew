@@ -81,7 +81,10 @@ Run() {
 	echo $1
 	[ -z "$MOD" ] && return || shift
 	Get $@
-	/bin/sh "$SRC" ${DST:+"$DST"}
+	/bin/sh "$SRC" ${DST:+"$DST"} && return ||
+	Msg "$1 failed, continue? [Y/n] \c"
+	read A <&2
+	case $A in ""|[Yy]);; *) exit 1;; esac
 }
 Lst() {
 	WRK=
