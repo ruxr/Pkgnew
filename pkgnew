@@ -304,8 +304,8 @@ Who() { # Pkg User Uid [Group Gid] [Home [Comment]]
 		sed "/^$N:[^:]*:$U:$I:/!d;s/.*/2/;q" /etc/passwd
 		sed "/^$N:/!d;s/.*/3/;q" /etc/shadow) in
 	1*2*3);;
-	'')	Msg @ $S; Cmd b || return 0; S=$*
-		groupadd -g $I $G; useradd -u $U -g $G -d $D ${S:+-c "$S"} $N;;
+	'')	Msg @ $S; Cmd b || return 0; S=$*; groupadd -r -g $I $G
+		useradd -r -u $U -g $G -d $D ${S:+-c "$S"} $N;;
 	*)	S="'$N' registered with errors"; Cmd b && End $S! || Msg ! $S
 	esac
 }
