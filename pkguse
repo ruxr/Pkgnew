@@ -56,7 +56,7 @@ Who() {
 	*)	Msg User $U created with errors
 	esac
 	[ -z "$MOD" ] && return || [ -z "$T" ]
-	if [ -x "$DST/usr/sbin/useradd" ]; then
+	if [ -x /usr/sbin/useradd ]; then
 		/usr/sbin/groupadd -r ${DST:+-R "$DST"} -g $g $G
 		/usr/sbin/useradd -r ${DST:+-R "$DST"} -u $u -g $G -d $H \
 			${*:+-c "$*"} $U
