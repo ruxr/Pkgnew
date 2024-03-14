@@ -545,8 +545,8 @@ RunBuild() {
 		}
 		$3 = L
 	}
-	{ print }' $TMP/PKG.new >$TMP/PKG.run
-	. $TMP/PKG.run
+	{ print }' $TMP/PKG.new >$TMP/Run
+	. $TMP/Run
 }
 BuildPackages() {
 	Msg Creating a list of required packages for building
