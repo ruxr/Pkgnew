@@ -67,22 +67,25 @@ PortPkgfile() { # Pkgfile [Flag]
 		done
 		[ -f $F ] && S=a$S
 	fi
-	bash -c "cd ${1%/*}; . $N
-		if [ \$? != 0 ]; then	:
-		elif [ -z \"\$name\" ]; then	echo - name
-		elif [ -z \"\$version\" ]; then	echo - version
-		elif [ -z \"\$release\" ]; then	echo - release
-		elif [ \"x$P\" != \"x\$name\" ]; then echo = name \"\$name\"
-		elif [ X\$(type -t build) != Xfunction ]; then echo + build
-		else	echo \$version-\$release -$S \${source[@]}
-		fi" 2>/dev/null
+	bash -c "cd ${1%/*}; . $N;"' [ $? = 0 ] || exit
+		if [ "x'$P'" != "x$name" ]; then echo = name "$name"
+		elif [ -z "$version" ]; then echo = version
+		elif [ -z "$release" ]; then echo = release
+		elif [ $(type -t build) != function ]; then echo + build
+		else	set -- ${renames[@]}
+			for F in ${source[@]}; do
+				[ -z "$1" -o "x$1" = xSKIP ] && L="$L $F" ||
+					L="$L $F::$1"
+				[ $# = 0 ] || shift
+			done
+			echo $version-$release -'$S' $L
+		fi' 2>/dev/null
 }
 PortCheck() {
 	case $1 in
 	'')	echo " runtime error $F";;
 	%)	shift; echo " $* $F";;
 	+)	echo " function '$2' not specified in $F";;
-	-)	echo " variable '$2' not specified in $F";;
 	=)	echo " variable '$2' has bad value '$3' in $F";;
 	*)	[ -n "$V" ] && echo " $V <?> $D/$P#$1" && return || V=$D/$P#$1
 		echo Use $P $D $*
@@ -185,7 +188,10 @@ NewPkg() { # Src ...
 	cd ${SRC%/*}
 	Inf Verify source files
 	for F in Pkgfile .footprint $*; do
-		case $F in */*) F=$PKGMK_SOURCE_DIR/${F##*/};; *) F=$D/$F;; esac
+		case $F in
+		*/*) F=${F##*::} F=$PKGMK_SOURCE_DIR/${F##*/};;
+		*) F=$D/$F
+		esac
 		ln -s $F .
 	done
 	if [ -f $D/.signature ]; then
@@ -195,18 +201,21 @@ NewPkg() { # Src ...
 	fi
 	cd $D
 	Inf Build the main package
-	bash -c "
+	bash -c '
 	unpack_source() {
-		for F in \${source[@]}; do
-			case \$F in */*) F=\$PKGMK_SOURCE_DIR/\${F##*/};; esac
-			case \$F in
+		set -- ${renames[@]}
+		for F in ${source[@]}; do
+			[ -z "$1" -o "x$1" = xSKIP ] || F=/$1
+			[ $# = 0 ] || shift
+			case $F in */*) F='$PKGMK_SOURCE_DIR'/${F##*/};; esac
+			case $F in
 			*.tar.[glx]z|*.tar.bz2|*.tar.Z|*.tar.lzma|*.tar| \
 			*.t[gx]z|*.tbz2|*.zip|*.rpm|*.7z)
-				bsdtar -C \$SRC -opxf \$F || exit;;
-			*)	cp \$F \$SRC
+				bsdtar -C $SRC -opxf $F || exit;;
+			*)	cp $F $SRC
 			esac
 		done
-	}
+	}'"
 	[ -f .32bit ] && PKGMK_ARCH=32 || PKGMK_ARCH=64
 	. $TMP/$P
 	. /etc/pkgmk.conf
@@ -249,9 +258,9 @@ NewPkg() { # Src ...
 	rm -rf ${SRC%/*}
 }
 GetSrc() {
-	F=$PKGMK_SOURCE_DIR/${S##*/}
-	[ -f $F ] && return || Msg get ${S##*/}
-	! Cmd b || { wget -cO $F~ $S && mv $F~ $F; } >$LOG 2>&1
+	F=${S##*::} F=$PKGMK_SOURCE_DIR/${F##*/}
+	[ -f $F ] && return || Msg get ${F##*/}
+	! Cmd b || { wget -cO $F~ ${S%%::*} && mv $F~ $F; } >$LOG 2>&1
 }
 Pkg() { # Repo Ver New Pkg ... -[apr] [Src ...]
 	G=$1 V=$2 S=$3 P=$4 D=$DIR/$1/$4 I= L= N= U=
@@ -578,7 +587,8 @@ DeleteUnused() {
 	echo $PKGMK_SOURCE_DIR/* $PKGMK_PACKAGE_DIR/*#* $WRK/[a-z]* |
 	awk -vA=$WRK/ -vE=$EXT -vP=$PKGMK_PACKAGE_DIR/ -vS=$PKGMK_SOURCE_DIR/ '
 	/^Pkg/ { F[A $3] = 0; for(i = 2; i++ < NF;) F[P $i "#" $2 E] = 0 }
-	/^Src/ { for(i = 1; i++ < NF;) if(sub(/^.+\//, "", $i)) F[S $i] = 0 }
+	/^Src/ { for(i = 1; i++ < NF;) if(sub(/^.+\//, "", $i))
+		{ sub(/.*::/, "", $i); F[S $i] = 0 } }
 	/^[a-z]/ { F[P $1] = 0 }
 	/^\// {
 		for(i = 0; i++ < NF;) {
