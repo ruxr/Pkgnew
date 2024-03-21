@@ -1,7 +1,7 @@
 #
-#	@(#) Makefile V2.2.2 (C) 2019-2022 by Roman Oreshnikov
+#	@(#) Makefile V2.3 (C) 2019-2024 by Roman Oreshnikov
 #
-CRUX	= 3.6
+CRUX	= 3.7
 BINDIR	= /usr/sbin
 MANDIR	= /usr/share/man/man8
 TAREXT	= .tar.xz
