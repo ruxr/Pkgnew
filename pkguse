@@ -99,6 +99,7 @@ Lst() {
 		case /^lib\/modules\//:
 		case /^lost\+found\/?/:
 		case /^usr\/(ports|src)\/?/:
+		case /^usr\/share\/fonts\/X11\/.+\/fonts\.(dir|scale)$/:
 		case /^var\/(cache|lib|log|run|spool)\//:
 		case /^(lib64)?$/:	next
 		}
