@@ -94,24 +94,24 @@ Lst() {
 		sub(/^\.\/*/, "")
 		if($0 in L) { delete L[$0]; next }
 		switch($0) {
-		case /^(boot)|(home)|(root)\//:
+		case /^(boot|home|root)\//:
 		case /^etc\/ssh\/ssh_host_.*_key(\.pub)?$/:
 		case /^lib\/modules\//:
 		case /^lost\+found\/?/:
-		case /^usr\/(ports)|(src)\/?/:
-		case /^var\/(cache)|(lib)|(log)|(run)|(spool)\//:
+		case /^usr\/(ports|src)\/?/:
+		case /^var\/(cache|lib|log|run|spool)\//:
 		case /^(lib64)?$/:	next
 		}
-		F[$0] = "/" $0
+		F["/" $0]
 		next
 	}
-	/\// {	sub(/\/$/, ""); L[$0] = $0 }
+	/\// {	sub(/\/$/, ""); L[$0] }
 	END {
 		delete L["lib64"]
 		print "### List of files not included in packages:"
-		asort(F); for(p in F) print F[p]
+		asorti(F); for(p in F) print F[p]
 		print "### List of missing files included in packages:"
-		asort(L); for(p in L) print L[p]
+		asorti(L); for(p in L) print L[p]
 	}' $DBD -
 	End
 }
